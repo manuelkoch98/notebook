@@ -35,9 +35,9 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 | Firebase Authentication | Offen | Emulator erforderlich | Anmeldung und Sitzungsverwaltung fehlen |
 | Firestore-Synchronisierung | Offen | Emulator erforderlich | Merge-Queue, Offline-Änderungen und Konfliktkopien fehlen |
 | Cloud Storage | Offen | Emulator erforderlich | Dateiupload/-download und Regeln vorbereitet, Client fehlt |
-| Nutzer-/Vault-Sicherheitsregeln | Regeln vorbereitet | Firebase Emulator, noch nicht ausgeführt | Emulator Suite nicht vorhanden/ausgeführt; Regelabdeckung ergänzen |
+| Nutzer-/Vault-Sicherheitsregeln | Regeln + Emulator-Test vorbereitet | `npm run test:rules` gestartet, Emulatorstart scheiterte | Java-Binärdatei ist auf diesem Mac nur ein JRE-Hinweis ohne Runtime; außerdem blockiert DNS den Firebase-CLI-Remote-Aufruf. Firestore/Storage-Regeln noch nicht empirisch bestätigt |
 | PWA | Shell implementiert | Browserlauf unter localhost; Manifest/Service Worker prüfen | Offline-Shell vorhanden; Offline-Notizänderungen und Sync fehlen |
-| macOS-/Windows-Desktop | Offen | Geeignete Runner erforderlich | Kein Desktop-Container oder Installer erstellt |
+| macOS-/Windows-Desktop | Tauri-2-Gerüst | Buildversuch steht aus | macOS: Rust/Cargo fehlen; Windows-Runner fehlt. Keine Installer gebaut/installiert/getestet |
 
 ## Geplante Abnahmefälle
 
@@ -49,4 +49,4 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 
 ## Funktionsprüfungen
 
-Manuelle Browser-Abnahme am 20.11.2026: Notiz anlegen, Markdown bearbeiten, Vorschau, Wikilink öffnen, Zielnotiz umbenennen (eingehender Link aktualisiert), Volltext suchen; alles bestätigt. `npm run check` und `npm run build` erfolgreich. ZIP-Roundtrip, Import/Export mit Testvault, Firebase Emulator, Offline-/Mehrgeräte-Sync und Desktop-Installer wurden nicht geprüft.
+Manuelle Browser-Abnahme am 20.11.2026: Notiz anlegen, Markdown bearbeiten, Vorschau, Wikilink öffnen, Zielnotiz umbenennen (eingehender Link aktualisiert), Volltext suchen; alles bestätigt. `npm run check` und `npm run build` erfolgreich. Service Worker und Manifest geprüft. `npm run test:rules` wurde versucht, aber Emulatorstart scheiterte: Java meldet, dass keine Java-Runtime vorhanden ist, und der Firebase CLI Remote-Aufruf scheitert an DNS. ZIP-Roundtrip, Import/Export mit Testvault, erfolgreiche Firebase Emulator-Prüfung, Offline-/Mehrgeräte-Sync und Desktop-Installer wurden nicht geprüft.

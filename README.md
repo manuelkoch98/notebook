@@ -4,10 +4,10 @@ Eine eigenständig gestaltete, browserbasierte Notiz-App. Der erste Abschnitt sp
 
 ## Lokal starten
 
-Voraussetzungen: Python 3.10+ oder ein anderer statischer HTTP-Server. Im Projektordner:
+Voraussetzungen: Node.js 16+. Im Projektordner:
 
 ```sh
-python3 -m http.server 4173
+npm run dev
 ```
 
 Dann `http://localhost:4173` öffnen. Die PWA benötigt localhost oder HTTPS. Daten verbleiben zunächst in `localStorage` des Browsers und werden durch Löschen der Website-Daten entfernt. Noch keine sensiblen Produktivnotizen eintragen.
@@ -16,7 +16,7 @@ Dann `http://localhost:4173` öffnen. Die PWA benötigt localhost oder HTTPS. Da
 
 Das Client-Konfigurationsmuster liegt in `.env.example`; daraus eine lokale `.env` machen und die Web-App-Werte aus Firebase Console → Projekteinstellungen → Allgemein eintragen. Diese Web-SDK-Werte sind keine Admin-Zugangsdaten. Firebase Admin SDK-Schlüssel, Service-Account-JSON, Tokens und echte Testdaten gehören niemals ins Repository.
 
-Firestore-/Storage-Regeln liegen in `firebase/`. Sie sperren den Zugriff auf `users/{uid}/vaults/{vaultId}` für angemeldete Nutzer auf genau die eigene UID. Sie müssen im Firebase Emulator und Projekt geprüft werden, bevor Cloud-Zugriff aktiviert wird. Der Client verwendet diese Regeln noch nicht, weil Authentifizierung und Cloud-Synchronisierung noch nicht implementiert sind.
+Firestore-/Storage-Regeln liegen in `firebase/`. Sie sperren den Zugriff auf `users/{uid}/vaults/{vaultId}` für angemeldete Nutzer auf genau die eigene UID. Die Emulator-Konfiguration liegt in `firebase.json`; `npm run test:rules` erstellt zwei kurzlebige Konten und prüft, dass das zweite Konto den fremden Vault nicht lesen oder ändern kann. Dafür werden Node.js und ein verwendbares Java JDK benötigt; Firebase dokumentiert JDK 11+ und weist auf Java 21 für kommende Firestore-Emulator-Versionen hin. Der Client verwendet diese Regeln noch nicht, weil Authentifizierung und Cloud-Synchronisierung noch nicht implementiert sind.
 
 Geplantes Datenmodell: `users/{uid}/vaults/{vaultId}` (Metadaten), darunter `notes/{noteId}` mit Markdown-Text, Pfad, Revision und Änderungszeit; Anhänge unter `users/{uid}/vaults/{vaultId}/attachments/{attachmentId}`. Konfliktstrategie: bei konkurrierender Basisrevision beide Fassungen als wiederherstellbare Konfliktnotiz speichern, nie still überschreiben.
 
@@ -26,7 +26,15 @@ Vercel → Add New → Project → privates GitHub-Repository importieren. Frame
 
 ## Desktop
 
-macOS- und Windows-Installer sind noch nicht eingerichtet. Geplant ist ein Tauri-Container für dieselbe Web-App. Für macOS wird ein passender macOS-Runner benötigt, für Windows ein Windows-Runner. Es wurden keine Installer gebaut oder getestet; daher gibt es keine geprüften Download-Artefakte. Build-Befehle werden ergänzt, sobald die Tauri-Konfiguration Teil des nächsten Abschnitts ist.
+Ein Tauri-2-Gerüst für dieselbe Web-App liegt in `src-tauri/`. Nach `npm install` sind die Befehle:
+
+```sh
+npm run desktop:dev
+npm run desktop:build:mac       # macOS .app und .dmg, auf macOS
+npm run desktop:build:windows   # Windows .msi und NSIS .exe, auf Windows
+```
+
+Voraussetzung sind Rust/Cargo, Tauri CLI und die plattformspezifischen Build-Werkzeuge. Dieses Mac-System hat Xcode, aber kein Rust/Cargo und keine verwendbare Java-Runtime; ein Windows-Runner ist hier nicht verfügbar. Deshalb wurden keine Installer gebaut, installiert oder getestet. Die offiziellen Tauri-Anleitungen nennen `tauri build` für die Bundles und sehen macOS bzw. Windows als Build-Host für die jeweiligen Installer vor.
 
 ## Import/Export
 

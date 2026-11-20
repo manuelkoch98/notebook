@@ -10,7 +10,8 @@
   let activeVault = db.vaults[0];
   let activeNoteId = null;
   let openTabs = [];
-  let mode = 'edit';
+  let mode = 'read';
+  const collapsedFolders = new Set();
   let paletteIndex = 0;
   let actions = [];
 
@@ -22,31 +23,36 @@
   function save() { persist(); renderTree(); renderTabs(); updateStats(); $('#status-note').textContent = activeNoteId ? `${noteById(activeNoteId)?.title || 'Notiz'} · lokal gespeichert` : 'Lokal gespeichert'; }
   function renderTree() {
     $('#vault-switch').innerHTML = `${esc(activeVault.name)} <span>⌄</span>`;
-    const folders = [...new Set(activeVault.folders || [])].sort((a,b)=>a.localeCompare(b,'de'));
+    const folders = [...new Set(activeVault.folders || [])].sort((a,b)=>a.split('/').length-b.split('/').length||a.localeCompare(b,'de'));
     let html = '';
     for (const f of folders) {
-      const level = f.includes('/') ? (f.split('/').length - 1) : 0;
-      if (f.includes('/')) continue;
-      html += `<div class="tree-item folder" data-folder="${esc(f)}"><span class="tree-icon">⌄</span><span>▱</span>${esc(f)}</div>`;
-      for (const n of activeVault.notes.filter(x => x.path.startsWith(f+'/')).sort((a,b)=>a.title.localeCompare(b.title,'de')))
-        html += `<div class="tree-item ${n.id===activeNoteId?'active':''}" style="padding-left:${20+level*12}px" data-note="${esc(n.id)}"><span class="tree-icon">·</span><span>▤</span>${esc(n.title)}</div>`;
+      const level=f.split('/').length-1,parent=f.includes('/')?f.slice(0,f.lastIndexOf('/')):'';
+      if(parent&&collapsedFolders.has(parent))continue;
+      const isCollapsed=collapsedFolders.has(f);
+      const children=activeVault.notes.filter(n=>n.path.includes('/')&&n.path.slice(0,n.path.lastIndexOf('/'))===f).sort((a,b)=>a.title.localeCompare(b.title,'de'));
+      html+=`<div class="tree-item folder ${isCollapsed?'collapsed':''}" style="padding-left:${7+level*14}px" data-folder="${esc(f)}"><button class="disclosure" type="button" aria-label="${isCollapsed?'Ordner ausklappen':'Ordner einklappen'}" aria-expanded="${!isCollapsed}" data-toggle-folder="${esc(f)}">${isCollapsed?'›':'⌄'}</button><span class="tree-glyph">▱</span><span class="tree-label">${esc(f.split('/').pop())}</span></div>`;
+      if(isCollapsed)continue;
+      for(const n of children)html+=`<div class="tree-item ${n.id===activeNoteId?'active':''}" style="padding-left:${21+(level+1)*14}px" data-note="${esc(n.id)}"><span class="tree-disclosure-spacer"></span><span class="tree-glyph file-glyph">▤</span><span class="tree-label">${esc(n.title)}</span></div>`;
     }
-    for (const n of activeVault.notes.filter(x => !x.path.includes('/')).sort((a,b)=>a.title.localeCompare(b.title,'de')))
-      html += `<div class="tree-item ${n.id===activeNoteId?'active':''}" data-note="${esc(n.id)}"><span class="tree-icon">·</span><span>▤</span>${esc(n.title)}</div>`;
+    for(const n of activeVault.notes.filter(x=>!x.path.includes('/')).sort((a,b)=>a.title.localeCompare(b.title,'de')))
+      html+=`<div class="tree-item ${n.id===activeNoteId?'active':''}" data-note="${esc(n.id)}"><span class="tree-disclosure-spacer"></span><span class="tree-glyph file-glyph">▤</span><span class="tree-label">${esc(n.title)}</span></div>`;
     $('#file-tree').innerHTML = html || '<div class="tree-item">Noch keine Notizen</div>';
     $('#file-tree').querySelectorAll('[data-note]').forEach(el=>el.onclick=()=>openNote(el.dataset.note));
-    $('#file-tree').querySelectorAll('[data-folder]').forEach(el=>el.onclick=()=>{const f=el.dataset.folder; const n=activeVault.notes.find(x=>x.path.startsWith(f+'/')); if(n)openNote(n.id);});
+    $('#file-tree').querySelectorAll('[data-folder]').forEach(el=>el.onclick=e=>{if(e.target.closest('.disclosure'))return;toggleFolder(el.dataset.folder);});
+    $('#file-tree').querySelectorAll('[data-toggle-folder]').forEach(el=>el.onclick=e=>{e.stopPropagation();toggleFolder(el.dataset.toggleFolder);});
   }
+  function toggleFolder(path){if(collapsedFolders.has(path))collapsedFolders.delete(path);else collapsedFolders.add(path);renderTree();}
   function renderTabs() { $('#tabs').innerHTML = openTabs.map(id=>{const n=noteById(id);return n?`<div class="tab ${id===activeNoteId?'active':''}" data-tab="${esc(id)}"><span>▤</span>${esc(n.title)}<span class="tab-x" data-close="${esc(id)}">×</span></div>`:''}).join('');
     $('#tabs').querySelectorAll('[data-tab]').forEach(el=>el.onclick=e=>{if(e.target.dataset.close){closeTab(e.target.dataset.close);e.stopPropagation();}else openNote(el.dataset.tab);}); }
-  function openNote(id) { const n=noteById(id); if(!n)return; activeNoteId=id; if(!openTabs.includes(id))openTabs.push(id); $('#welcome').classList.add('hidden');$('#note-view').classList.remove('hidden');$('#right-empty').classList.add('hidden');$('#right-details').classList.remove('hidden'); $('#note-title').value=n.title;$('#markdown').value=n.body;$('#note-date').textContent=new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'long',year:'numeric'}).format(new Date(n.updated)).toUpperCase();$('#created-value').textContent=new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(n.created));$('#crumb-title').textContent=n.title;$('#file-info').textContent=`${n.path} · Markdown`;$('#status-note').textContent=`${n.title} · lokal gespeichert`; renderTree();renderTabs();updateStats();renderMarkdown(); }
+  function openNote(id) { const n=noteById(id); if(!n)return; activeNoteId=id; if(!openTabs.includes(id))openTabs.push(id); $('#welcome').classList.add('hidden');$('#note-view').classList.remove('hidden');$('#right-empty').classList.add('hidden');$('#right-details').classList.remove('hidden'); $('#note-title').value=n.title;$('#markdown').value=n.body;$('#note-date').textContent=new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'long',year:'numeric'}).format(new Date(n.updated)).toUpperCase();$('#created-value').textContent=new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(n.created));$('#crumb-title').textContent=n.title;$('#file-info').textContent=`${n.path} · Markdown`;$('#status-note').textContent=`${n.title} · lokal gespeichert`; renderTree();renderTabs();updateStats();renderMarkdown();setMode('read'); if(window.matchMedia('(max-width: 680px)').matches)toggleMobileSidebar(false); }
   function closeTab(id) { openTabs=openTabs.filter(x=>x!==id); if(activeNoteId===id){activeNoteId=openTabs.at(-1)||null;if(activeNoteId)openNote(activeNoteId);else{ $('#note-view').classList.add('hidden');$('#welcome').classList.remove('hidden');$('#right-details').classList.add('hidden');$('#right-empty').classList.remove('hidden');$('#crumb-title').textContent='Willkommen';}} renderTabs(); }
-  function makeNote(title='Neue Notiz',folder='') { title=slug(title); let base=title, i=2; while(activeVault.notes.some(n=>n.path===`${folder?folder+'/':''}${title}.md`)) title=`${base} ${i++}`; const n={id:crypto.randomUUID(),title,path:`${folder?folder+'/':''}${title}.md`,body:'',created:Date.now(),updated:Date.now()};activeVault.notes.push(n);save();openNote(n.id);$('#note-title').focus();$('#note-title').select(); }
+  function makeNote(title='Neue Notiz',folder='') { title=slug(title); let base=title, i=2; while(activeVault.notes.some(n=>n.path===`${folder?folder+'/':''}${title}.md`)) title=`${base} ${i++}`; const n={id:crypto.randomUUID(),title,path:`${folder?folder+'/':''}${title}.md`,body:'',created:Date.now(),updated:Date.now()};activeVault.notes.push(n);save();openNote(n.id);setMode('edit');$('#note-title').focus();$('#note-title').select(); }
   function updateTitle(value) { const n=noteById(activeNoteId);if(!n)return;const oldTitle=n.title,newTitle=slug(value);if(!newTitle)return; const oldBase=n.path;const folder=oldBase.includes('/')?oldBase.slice(0,oldBase.lastIndexOf('/')+1):'';const newPath=folder+newTitle+'.md'; if(activeVault.notes.some(x=>x.id!==n.id&&x.path.toLowerCase()===newPath.toLowerCase())){toast('Eine Notiz mit diesem Namen existiert bereits.');return;} n.title=newTitle;n.path=newPath;n.updated=Date.now();activeVault.notes.forEach(other=>{if(other.id===n.id)return;other.body=other.body.replaceAll(`[[${oldTitle}]]`,`[[${newTitle}]]`).replaceAll(`[[${oldBase.replace(/\.md$/i,'')}]]`,`[[${newPath.replace(/\.md$/i,'')}]]`);});$('#note-title').value=newTitle;$('#crumb-title').textContent=newTitle;save(); }
   function updateStats() {const body=$('#markdown').value;const words=body.trim()?body.trim().split(/\s+/).length:0;$('#word-count').textContent=`${words} WÖRTER`;}
   function inline(s) { return s.replace(/&amp;/g,'&').replace(/\[\[([^\]]+)\]\]/g,(_,label)=>`<a href="#" data-wiki="${esc(label.split('|')[0].split('#')[0])}">${esc(label.split('|')[1]||label)}</a>`).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/\[(.+?)\]\((https?:[^ )]+)\)/g,'<a href="$2" target="_blank" rel="noreferrer">$1</a>'); }
   function renderMarkdown() { const body=$('#markdown').value;const lines=body.split('\n');let out='',list=false; for(const line of lines){if(/^\s*[-*+]\s/.test(line)){if(!list){out+='<ul>';list=true;}out+=`<li>${inline(line.replace(/^\s*[-*+]\s/,''))}</li>`;continue;}if(list){out+='</ul>';list=false;}if(/^### /.test(line))out+=`<h3>${inline(line.slice(4))}</h3>`;else if(/^## /.test(line))out+=`<h2>${inline(line.slice(3))}</h2>`;else if(/^# /.test(line))out+=`<h1>${inline(line.slice(2))}</h1>`;else if(/^> /.test(line))out+=`<blockquote>${inline(line.slice(2))}</blockquote>`;else if(!line.trim())out+='<br>';else out+=`<p>${inline(line)}</p>`;} if(list)out+='</ul>';$('#preview').innerHTML=out;$('#preview').querySelectorAll('[data-wiki]').forEach(a=>a.onclick=e=>{e.preventDefault();const title=a.dataset.wiki;const found=activeVault.notes.find(n=>n.title.toLowerCase()===title.toLowerCase()||n.path.replace(/\.md$/i,'').toLowerCase()===title.toLowerCase());if(found)openNote(found.id);else{makeNote(title);toast(`Notiz „${title}“ angelegt`);}}); }
-  function switchMode() {mode=mode==='edit'?'read':'edit';const edit=mode==='edit';$('#markdown').classList.toggle('hidden',!edit);$('#preview').classList.toggle('hidden',edit);$('#mode-toggle').innerHTML=edit?'◉ <span>Vorschau</span>':'✎ <span>Bearbeiten</span>'; }
+  function setMode(next) {if(!activeNoteId)return;mode=next;const edit=mode==='edit';$('#markdown').classList.toggle('hidden',!edit);$('#preview').classList.toggle('hidden',edit);$('#note-title').readOnly=!edit;$('#mode-toggle').innerHTML=edit?'◉ <span>Vorschau</span>':'✎ <span>Bearbeiten</span>';}
+  function switchMode() {setMode(mode==='edit'?'read':'edit');}
   function toast(msg) {document.querySelector('.toast')?.remove();const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.append(t);setTimeout(()=>t.remove(),2600);}
   function showDialog(content,focusSel) {$('#dialog').innerHTML=content;$('#overlay').classList.remove('hidden');const f=focusSel&&$(focusSel);if(f)f.focus();}
   function hideDialog(){ $('#overlay').classList.add('hidden'); }
@@ -63,10 +69,14 @@
   function exportAll(){for(const [i,n] of activeVault.notes.entries())setTimeout(()=>download(n.body,n.path.replaceAll('/','__')),i*180);toast(`${activeVault.notes.length} Markdown-Dateien werden heruntergeladen`);}
   async function importFiles(files){let count=0;for(const f of files){if(!/\.(md|markdown|txt)$/i.test(f.name))continue;const body=await f.text();const path=f.webkitRelativePath?.split('/').slice(1).join('/')||f.name;const title=slug(path.split('/').pop());const withoutExt=path.replace(/\.(md|markdown|txt)$/i,'');const id=crypto.randomUUID();const existing=activeVault.notes.find(n=>n.path.toLowerCase()===`${withoutExt}.md`.toLowerCase());if(existing){existing.body=body;existing.title=title;existing.updated=Date.now();}else activeVault.notes.push({id,title,path:withoutExt+'.md',body,created:Date.now(),updated:Date.now()});const dirs=withoutExt.split('/').slice(0,-1);for(let i=1;i<=dirs.length;i++)activeVault.folders.push(dirs.slice(0,i).join('/'));count++;}save();if(count)toast(`${count} Markdown-Datei(en) importiert`);else toast('Keine Markdown-Dateien gefunden');}
   function renameDialog(){const n=noteById(activeNoteId);if(!n)return;showDialog(`<div class="form-dialog"><h3>Notiz umbenennen</h3><p>Interne Wikilinks auf diese Notiz werden mit angepasst.</p><label for="rename-value">Titel</label><input id="rename-value" value="${esc(n.title)}"/><div class="form-actions"><button data-cancel>Abbrechen</button><button id="rename-save">Umbenennen</button></div></div>`,'#rename-value');$('#dialog [data-cancel]').onclick=hideDialog;$('#rename-save').onclick=()=>{updateTitle($('#rename-value').value);hideDialog();};}
-  function runAction(name){const map={files:()=>{},search:()=>openPalette(true),palette:()=>openPalette(false),'new-note':()=>makeNote(),'new-folder':createFolder,'new-vault':showVaults,import:()=>$('#folder-picker').click(),export:exportAll,'export-one':exportCurrent,rename:renameDialog,graph:showGraph,settings:showSettings,'sync-info':()=>toast('Lokaler Speicher aktiv. Firebase-Synchronisierung ist noch nicht eingerichtet.')};map[name]?.();}
+  function toggleMobileSidebar(force){const shell=$('#app-shell');const open=force??!shell.classList.contains('sidebar-open');shell.classList.toggle('sidebar-open',open);const toggle=document.querySelector('[data-action="files"]');toggle?.setAttribute('aria-expanded',String(open));}
+  function runAction(name){const map={files:()=>toggleMobileSidebar(),search:()=>openPalette(true),palette:()=>openPalette(false),'new-note':()=>makeNote(),'new-folder':createFolder,'new-vault':showVaults,import:()=>$('#folder-picker').click(),export:exportAll,'export-one':exportCurrent,rename:renameDialog,graph:showGraph,settings:showSettings,'sync-info':()=>toast('Lokaler Speicher aktiv. Firebase-Synchronisierung ist noch nicht eingerichtet.')};map[name]?.();}
   document.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)runAction(b.dataset.action);});
+  $('#note-title').addEventListener('focus',()=>setMode('edit'));
   $('#note-title').addEventListener('change',e=>updateTitle(e.target.value));
   $('#markdown').addEventListener('input',()=>{const n=noteById(activeNoteId);if(!n)return;n.body=$('#markdown').value;n.updated=Date.now();renderMarkdown();updateStats();persist();$('#status-note').textContent='Änderungen gespeichert';});
+  $('#preview').addEventListener('click',e=>{if(!e.target.closest('a'))setMode('edit');});
+  document.addEventListener('click',e=>{if(mode==='edit'&&!e.target.closest('#note-view'))setMode('read');});
   $('#mode-toggle').onclick=switchMode;
   $('#file-picker').onchange=e=>{importFiles([...e.target.files]);e.target.value='';};
   $('#folder-picker').onchange=e=>{importFiles([...e.target.files]);e.target.value='';};

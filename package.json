@@ -11,7 +11,7 @@
     "check": "node --check scripts/build.mjs && node --check vite.config.js && node --check scripts/check-rules.mjs",
     "test:rules": "firebase emulators:exec --project demo-atelier --only auth,firestore \"node scripts/check-rules.mjs\"",
     "tauri": "tauri",
-    "desktop:icons": "tauri icon icon.svg --output src-tauri/icons",
+    "desktop:icons": "tauri icon public/icon.svg --output src-tauri/icons",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "desktop:build:mac": "tauri build --bundles app,dmg",

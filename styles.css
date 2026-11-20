@@ -58,3 +58,5 @@
 @media(max-width:680px){.app-shell{grid-template-columns:38px minmax(0,1fr)}.sidebar{display:none}.login-card{padding:29px 23px 23px}.login-card h1{font-size:29px}}
 @media(max-width:680px){.app-shell.sidebar-open .sidebar{display:flex;position:absolute;z-index:9;left:38px;top:0;bottom:0;width:min(280px,calc(100vw - 38px));box-shadow:12px 0 30px #252a2318}.app-shell.sidebar-open:after{content:'';position:fixed;inset:0 0 0 38px;background:#20271e24;z-index:8;pointer-events:none}.rail{position:relative;z-index:10}.workspace-row{align-items:center}.sidebar-tools button{height:38px;font-size:13px}.tree-item{height:34px}.login-screen{padding:16px}.login-card{max-width:400px}.login-form{gap:9px}}
 .google-button:disabled,.login-submit:disabled{cursor:wait;opacity:.62}
+atelier-rail,atelier-sidebar,atelier-workspace,atelier-overlays,atelier-login-page{display:contents}
+html.auth-pending body{visibility:hidden}

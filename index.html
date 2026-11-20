@@ -10,85 +10,16 @@
     <link rel="stylesheet" href="/styles.css" />
     <title>Atelier — Wissenswerkstatt</title>
     <script src="/firebase-config.js"></script>
-    <script>if (window.ATELIER_FIREBASE?.enabled) document.documentElement.classList.add('requires-auth');</script>
+    <script>if (window.ATELIER_FIREBASE?.enabled) document.documentElement.classList.add('auth-pending');</script>
   </head>
   <body>
-    <main id="login-screen" class="login-screen hidden" aria-labelledby="login-title">
-      <section class="login-card">
-        <div class="login-brand"><span class="brand-mark">a<span>.</span></span><span>ATELIER</span></div>
-        <div class="welcome-kicker">DEIN PERSÖNLICHER WISSENSGARTEN</div>
-        <h1 id="login-title">Willkommen zurück.</h1>
-        <p class="login-intro">Melde dich an, um Atelier zu öffnen.</p>
-        <button id="google-sign-in" class="google-button"><svg class="google-logo" aria-hidden="true" viewBox="0 0 48 48"><path fill="#4285F4" d="M43.611 20.083H42V20H24v8h11.303a12 12 0 0 1-4.196 5.571v.001l6.489 5.034C41.426 34.493 44 29.687 44 24c0-1.341-.138-2.65-.389-3.917z"/><path fill="#34A853" d="M24 44c5.4 0 9.926-1.79 13.234-4.849l-6.489-5.034C28.946 35.507 26.715 36.4 24 36.4c-5.224 0-9.646-3.526-11.234-8.269l-6.695 5.164C9.356 39.556 16.227 44 24 44z"/><path fill="#FBBC05" d="M12.766 28.131A12.03 12.03 0 0 1 12.1 24c0-1.438.252-2.817.702-4.101l-6.695-5.164A19.94 19.94 0 0 0 4 24c0 3.228.77 6.275 2.107 8.969l6.659-4.838z"/><path fill="#EA4335" d="M24 11.6c2.927 0 5.556 1.007 7.625 2.982l5.72-5.72C33.917 5.59 29.4 4 24 4 16.227 4 9.356 8.444 6.107 14.735l6.695 5.164C14.354 15.126 18.776 11.6 24 11.6z"/></svg>Mit Google fortfahren</button>
-        <div class="login-divider"><span>oder mit E-Mail</span></div>
-        <form id="email-form" class="login-form">
-          <label for="login-email">E-Mail-Adresse</label>
-          <input id="login-email" type="email" autocomplete="email" required placeholder="du@beispiel.at" />
-          <label for="login-password">Passwort</label>
-          <input id="login-password" type="password" autocomplete="current-password" required minlength="6" placeholder="Mindestens 6 Zeichen" />
-          <button id="email-submit" class="primary-button login-submit" type="submit">Anmelden</button>
-        </form>
-        <div class="login-links"><button id="create-account" class="text-button">Konto erstellen</button><button id="reset-password" class="text-button">Passwort vergessen?</button></div>
-        <p id="login-message" class="login-message" role="status" aria-live="polite"></p>
-        <p class="login-note">Deine Notizen werden derzeit lokal gespeichert. Die Cloud-Synchronisierung folgt als eigener Schritt.</p>
-      </section>
-    </main>
     <div id="app-shell" class="app-shell">
-      <aside class="rail">
-        <div class="brand-mark">a<span>.</span></div>
-        <button class="rail-button active" title="Dateien" aria-label="Dateien" aria-expanded="false" data-action="files"><svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M3.5 8.5V5a1.5 1.5 0 0 1 1.5-1.5h4l2 2"/></svg></button>
-        <button class="rail-button" title="Suche" aria-label="Suche" data-action="search"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg></button>
-        <button class="rail-button" title="Graph" aria-label="Graph" data-action="graph"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="17.5" cy="5" r="2"/><circle cx="18" cy="18" r="2"/><path d="m8 11 7.5-5M8 13l8 4"/></svg></button>
-        <div class="rail-spacer"></div>
-        <button class="rail-button" title="Befehlspalette" aria-label="Befehlspalette" data-action="palette"><svg viewBox="0 0 24 24"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/></svg></button>
-        <button class="rail-button" title="Einstellungen" aria-label="Einstellungen" data-action="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 3.1-.2-.1a1.7 1.7 0 0 0-1.8 0l-.2.1h-3.6l-.1-.2a1.7 1.7 0 0 0-1.5-1l-.2.1-3.1-1.8.1-.2a1.7 1.7 0 0 0 0-1.8l-.1-.2v-3.6l.2-.1a1.7 1.7 0 0 0 1-1.5l-.1-.2L10.2 6l.2.1a1.7 1.7 0 0 0 1.8 0l.2-.1H16l.1.2a1.7 1.7 0 0 0 1.5 1l.2-.1 3.1 1.8-.1.2a1.7 1.7 0 0 0 0 1.8l.1.2v3.6z"/></svg></button>
-        <div class="avatar">M</div>
-      </aside>
-
-      <aside class="sidebar" id="sidebar">
-        <div class="workspace-row"><div class="workspace-name"><div class="eyebrow">DEIN ARBEITSBEREICH</div><button id="vault-switch" class="vault-switch">Mein Wissensgarten <span>⌄</span></button></div><button class="icon-button" title="Neuen Vault erstellen" aria-label="Neuen Vault erstellen" data-action="new-vault">＋</button></div>
-        <div class="sidebar-tools"><button data-action="new-note"><span class="tool-icon">＋</span><span>Neue Notiz</span></button><button data-action="new-folder"><span class="tool-icon">▱</span><span>Neuer Ordner</span></button><button data-action="import"><span class="tool-icon">⇧</span><span>Markdown oder Vault importieren</span></button></div>
-        <div class="section-label">DATEIEN <button title="Sortieren" class="quiet">↕</button></div>
-        <div id="file-tree" class="file-tree"></div>
-        <div class="sidebar-bottom"><div class="sync-dot"></div><span id="storage-label">Nur auf diesem Gerät</span><button class="quiet" data-action="sync-info" title="Synchronisierung">ⓘ</button><button class="quiet sign-out-button hidden" data-auth-sign-out title="Abmelden">↪</button></div>
-      </aside>
-
-      <main class="main-area">
-        <header class="topbar"><div class="breadcrumbs"><span>Mein Wissensgarten</span><span class="crumb-sep">/</span><strong id="crumb-title">Willkommen</strong></div><div class="topbar-actions"><button class="top-icon" title="Suche" data-action="search">⌕</button><button class="top-icon" title="Befehlspalette · ⌘K" data-action="palette">⌘K</button><button class="share-button" data-action="export">Exportieren <span>↗</span></button></div></header>
-        <div id="tabs" class="tabs"></div>
-        <div class="content-wrap">
-          <section class="editor-pane">
-            <div id="welcome" class="welcome-view">
-              <div class="welcome-kicker"><span class="spark">✳</span> DEIN DIGITALER GARTEN</div>
-              <h1>Hallo <em>Manuel.</em></h1>
-              <p class="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p>
-              <div class="welcome-actions"><button class="primary-button" data-action="new-note">＋ <span>Erste Notiz schreiben</span></button><button class="secondary-button" data-action="import">Vault importieren <span>↗</span></button></div>
-              <div class="welcome-divider"></div>
-              <div class="recent-head"><div><div class="eyebrow">LOS GEHT’S</div><h2>Dein Arbeitsbereich</h2></div><span class="local-badge"><i></i> Lokal gespeichert</span></div>
-              <div class="start-grid">
-                <button class="start-card" data-action="new-note"><span class="card-icon peach">✎</span><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small><b>↗</b></button>
-                <button class="start-card" data-action="search"><span class="card-icon mint">⌕</span><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small><b>↗</b></button>
-                <button class="start-card" data-action="palette"><span class="card-icon lilac">⌘</span><strong>Schnell navigieren</strong><small>Befehle und Aktionen</small><b>↗</b></button>
-              </div>
-            </div>
-            <div id="note-view" class="note-view hidden">
-              <div class="note-heading"><div class="note-meta"><span class="note-date" id="note-date">HEUTE</span><span class="meta-dot">·</span><span id="word-count">0 WÖRTER</span></div><div class="note-actions"><button id="mode-toggle" class="mode-toggle">◉ <span>Vorschau</span></button><button title="Umbenennen" class="top-icon" data-action="rename">✎</button><button title="Exportieren" class="top-icon" data-action="export-one">↗</button></div></div>
-              <input id="note-title" class="note-title-input" placeholder="Notiz ohne Titel" />
-              <div class="properties-row"><span class="property-key">Erstellt</span><span id="created-value">heute</span><button class="property-add" title="Eigenschaft hinzufügen">＋</button></div>
-              <textarea id="markdown" spellcheck="false" placeholder="Schreib deinen Gedanken auf …\n\nTipp: Nutze #tags, [[Wikilinks]] und Markdown-Formatierung."></textarea>
-              <article id="preview" class="markdown-preview hidden"></article>
-              <div class="editor-footer"><span><i class="save-dot"></i> Alle Änderungen gespeichert</span><span>Markdown <b>·</b> UTF-8</span></div>
-            </div>
-          </section>
-          <aside class="right-sidebar"><div class="right-head"><span>NOTIZ-DETAILS</span><button class="quiet">•••</button></div><div id="right-empty" class="right-empty"><div class="detail-orbit">✳</div><strong>Alles an seinem Platz</strong><p>Öffne eine Notiz, um ihre Details und Verbindungen zu sehen.</p></div><div id="right-details" class="right-details hidden"><div class="detail-title">Verbindungen</div><div class="detail-section"><span>BACKLINKS</span><p>Noch keine Rückverweise</p></div><div class="detail-section"><span>INHALTSVERZEICHNIS</span><p>Überschriften erscheinen hier</p></div><div class="detail-section"><span>EIGENSCHAFTEN</span><p>＋ Eigenschaft hinzufügen</p></div><div class="detail-section"><span>DATEI-INFORMATIONEN</span><p id="file-info">Markdown · lokal</p></div></div><div class="right-bottom"><span>✳</span> Mit Sorgfalt entworfen</div></aside>
-        </div>
-        <footer class="statusbar"><span><i class="save-dot"></i> Gespeichert</span><span id="status-note">Willkommen in Atelier</span><span>Markdown <b>·</b> UTF-8 <b>·</b> ♧</span></footer>
-      </main>
+      <atelier-rail></atelier-rail>
+      <atelier-sidebar></atelier-sidebar>
+      <atelier-workspace></atelier-workspace>
     </div>
-    <div id="overlay" class="overlay hidden"><div class="dialog" id="dialog"></div></div>
-    <input id="file-picker" type="file" accept=".md,.markdown,.txt" multiple hidden />
-    <input id="folder-picker" type="file" webkitdirectory directory multiple hidden />
-    <script src="/app.js" defer></script>
+    <atelier-overlays></atelier-overlays>
+    <script type="module" src="/app.js"></script>
     <script type="module" src="/firebase-auth.js"></script>
     <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
   </body>

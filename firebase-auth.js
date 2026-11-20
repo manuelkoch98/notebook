@@ -1,14 +1,12 @@
 const config = window.ATELIER_FIREBASE;
-const loginScreen = document.querySelector('#login-screen');
-const appShell = document.querySelector('.app-shell');
+const loginPage = location.pathname.endsWith('/login.html');
 const message = document.querySelector('#login-message');
 const form = document.querySelector('#email-form');
 const submit = document.querySelector('#email-submit');
 const googleButton = document.querySelector('#google-sign-in');
-let authApi;
-let creatingAccount = false;
 
 function showMessage(text, kind = 'error') {
+  if (!message) return;
   message.textContent = text;
   message.dataset.kind = kind;
 }
@@ -27,95 +25,50 @@ function friendlyError(error) {
   return messages[error?.code] || 'Anmeldung fehlgeschlagen. Prüfe die Firebase-Einstellungen und versuche es erneut.';
 }
 
-function revealApp(user = null) {
-  loginScreen.classList.add('hidden');
-  appShell.classList.remove('hidden');
-  document.documentElement.classList.remove('requires-auth');
-  const badge = document.querySelector('.avatar');
-  const signOut = document.querySelector('[data-auth-sign-out]');
-  const label = document.querySelector('#storage-label');
-  if (user) {
-    badge.textContent = (user.displayName || user.email || 'A').trim().charAt(0).toUpperCase();
-    badge.title = user.email || user.displayName || 'Angemeldet';
-    signOut.classList.remove('hidden');
-    label.textContent = 'Angemeldet · Notizen noch lokal';
-    window.dispatchEvent(new CustomEvent('atelier-auth-ready', { detail: { user } }));
-  } else {
-    badge.textContent = 'M';
-    badge.title = 'Lokaler Arbeitsbereich';
-    signOut.classList.add('hidden');
-    label.textContent = 'Nur auf diesem Gerät';
-    window.dispatchEvent(new CustomEvent('atelier-auth-ready', { detail: { user: null } }));
+function configureLogin(authApi) {
+  let creatingAccount = false;
+  const email = document.querySelector('#login-email');
+  const title = document.querySelector('#login-title');
+  const create = document.querySelector('#create-account');
+  const reset = document.querySelector('#reset-password');
+
+  function refreshMode() {
+    title.textContent = creatingAccount ? 'Dein Konto erstellen.' : 'Willkommen zurück.';
+    submit.textContent = creatingAccount ? 'Konto erstellen' : 'Anmelden';
+    create.textContent = creatingAccount ? 'Zur Anmeldung' : 'Konto erstellen';
+    document.querySelector('#login-password').autocomplete = creatingAccount ? 'new-password' : 'current-password';
+    showMessage('');
   }
+
+  create.addEventListener('click', () => { creatingAccount = !creatingAccount; refreshMode(); });
+  googleButton.addEventListener('click', async () => {
+    showMessage('Google-Anmeldung wird geöffnet.', 'info');
+    try { await authApi.signInWithPopup(authApi.auth, new authApi.GoogleAuthProvider()); }
+    catch (error) { showMessage(friendlyError(error)); }
+  });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    submit.disabled = true;
+    try {
+      const password = document.querySelector('#login-password').value;
+      if (creatingAccount) await authApi.createUserWithEmailAndPassword(authApi.auth, email.value.trim(), password);
+      else await authApi.signInWithEmailAndPassword(authApi.auth, email.value.trim(), password);
+    } catch (error) { showMessage(friendlyError(error)); }
+    finally { submit.disabled = false; }
+  });
+  reset.addEventListener('click', async () => {
+    if (!email.value.trim()) { showMessage('Gib zuerst deine E-Mail-Adresse ein.', 'info'); email.focus(); return; }
+    try {
+      await authApi.sendPasswordResetEmail(authApi.auth, email.value.trim());
+      showMessage('Wenn ein Konto zu dieser Adresse besteht, wurde eine E-Mail zum Zurücksetzen gesendet.', 'success');
+    } catch (error) { showMessage(friendlyError(error)); }
+  });
 }
-
-function refreshEmailMode() {
-  document.querySelector('#login-title').textContent = creatingAccount ? 'Dein Konto erstellen.' : 'Willkommen zurück.';
-  submit.textContent = creatingAccount ? 'Konto erstellen' : 'Anmelden';
-  document.querySelector('#create-account').textContent = creatingAccount ? 'Zur Anmeldung' : 'Konto erstellen';
-  document.querySelector('#login-password').autocomplete = creatingAccount ? 'new-password' : 'current-password';
-  showMessage('');
-}
-
-document.querySelector('#create-account').addEventListener('click', () => {
-  creatingAccount = !creatingAccount;
-  refreshEmailMode();
-});
-
-document.querySelector('#google-sign-in').addEventListener('click', async () => {
-  if (!authApi) { showMessage('Firebase wird noch geladen. Bitte gleich erneut versuchen.', 'info'); return; }
-  showMessage('Google-Anmeldung wird geöffnet.', 'info');
-  try {
-    await authApi.signInWithPopup(authApi.auth, new authApi.GoogleAuthProvider());
-  } catch (error) {
-    showMessage(friendlyError(error));
-  }
-});
-
-form.addEventListener('submit', async event => {
-  event.preventDefault();
-  if (!authApi) { showMessage('Firebase wird noch geladen. Bitte gleich erneut versuchen.', 'info'); return; }
-  const email = document.querySelector('#login-email').value.trim();
-  const password = document.querySelector('#login-password').value;
-  submit.disabled = true;
-  try {
-    if (creatingAccount) await authApi.createUserWithEmailAndPassword(authApi.auth, email, password);
-    else await authApi.signInWithEmailAndPassword(authApi.auth, email, password);
-  } catch (error) {
-    showMessage(friendlyError(error));
-  } finally {
-    submit.disabled = false;
-  }
-});
-
-document.querySelector('#reset-password').addEventListener('click', async () => {
-  if (!authApi) { showMessage('Firebase wird noch geladen. Bitte gleich erneut versuchen.', 'info'); return; }
-  const email = document.querySelector('#login-email').value.trim();
-  if (!email) {
-    showMessage('Gib zuerst deine E-Mail-Adresse ein.', 'info');
-    document.querySelector('#login-email').focus();
-    return;
-  }
-  try {
-    await authApi.sendPasswordResetEmail(authApi.auth, email);
-    showMessage('Wenn ein Konto zu dieser Adresse besteht, wurde eine E-Mail zum Zurücksetzen gesendet.', 'success');
-  } catch (error) {
-    showMessage(friendlyError(error));
-  }
-});
-
-document.querySelector('[data-auth-sign-out]').addEventListener('click', async () => {
-  if (authApi) await authApi.signOut(authApi.auth);
-});
 
 if (!config?.enabled) {
-  revealApp();
+  document.documentElement.classList.remove('auth-pending');
+  if (loginPage) location.replace('/');
 } else {
-  appShell.classList.add('hidden');
-  loginScreen.classList.remove('hidden');
-  showMessage('Firebase wird geladen …', 'info');
-  googleButton.disabled = true;
-  submit.disabled = true;
   try {
     const [appSdk, authSdk] = await Promise.all([
       import('https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js'),
@@ -123,16 +76,32 @@ if (!config?.enabled) {
     ]);
     const app = appSdk.initializeApp(config.config);
     const auth = authSdk.getAuth(app);
-    authApi = { auth, ...authSdk };
-    googleButton.disabled = false;
-    submit.disabled = false;
-    showMessage('');
-    authSdk.onAuthStateChanged(auth, user => user ? revealApp(user) : (() => {
-      appShell.classList.add('hidden');
-      loginScreen.classList.remove('hidden');
-      document.documentElement.classList.add('requires-auth');
-    })());
+    const authApi = { auth, ...authSdk };
+
+    if (loginPage) {
+      configureLogin(authApi);
+      googleButton.disabled = false;
+      submit.disabled = false;
+      showMessage('');
+      authSdk.onAuthStateChanged(auth, user => { if (user) location.replace('/'); });
+    } else {
+      document.querySelector('[data-auth-sign-out]').addEventListener('click', () => authSdk.signOut(auth));
+      authSdk.onAuthStateChanged(auth, user => {
+        if (!user) { location.replace('/login.html'); return; }
+        document.documentElement.classList.remove('auth-pending');
+        const badge = document.querySelector('.avatar');
+        badge.textContent = (user.displayName || user.email || 'A').trim().charAt(0).toUpperCase();
+        badge.title = user.email || user.displayName || 'Angemeldet';
+        document.querySelector('[data-auth-sign-out]').classList.remove('hidden');
+        document.querySelector('#storage-label').textContent = 'Angemeldet · Notizen noch lokal';
+        window.dispatchEvent(new CustomEvent('atelier-auth-ready', { detail: { user } }));
+      });
+    }
   } catch {
-    showMessage('Firebase konnte nicht geladen werden. Prüfe die Internetverbindung und die Firebase-Konfiguration.');
+    if (loginPage) {
+      showMessage('Firebase konnte nicht geladen werden. Prüfe die Internetverbindung und die Firebase-Konfiguration.');
+    } else {
+      location.replace('/login.html?firebaseError=1');
+    }
   }
 }

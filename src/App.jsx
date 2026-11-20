@@ -72,11 +72,13 @@ function Workspace() {
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => Math.max(190, Math.min(480, Number(localStorage.getItem('atelier-sidebar-width')) || 256)));
   const [toast, setToast] = useState('');
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudStatus, setCloudStatus] = useState('Lokal zwischengespeichert');
   const [, setProfileVersion] = useState(0);
   const editorRef = useRef(null);
+  const sidebarResizing = useRef(false);
   const noteInputRef = useRef(null);
   const focusTitleRef = useRef(false);
   const vault = db.vaults.find(item => item.id === vaultId) || db.vaults[0];
@@ -86,6 +88,7 @@ function Workspace() {
   const profileGreeting = auth.user ? localStorage.getItem(`atelier-profile-name:${auth.user.uid}`) : localStorage.getItem('atelier-profile-name:local');
 
   useEffect(() => { localStorage.setItem(cacheKey, JSON.stringify(db)); }, [cacheKey, db]);
+  useEffect(() => { localStorage.setItem('atelier-sidebar-width', String(sidebarWidth)); }, [sidebarWidth]);
   useEffect(() => { const update = () => setProfileVersion(value => value + 1); window.addEventListener('atelier-profile-updated', update); return () => window.removeEventListener('atelier-profile-updated', update); }, []);
   useEffect(() => { const refresh = () => setDb(current => ({ ...current, vaults: [...current.vaults] })); window.addEventListener('online', refresh); return () => window.removeEventListener('online', refresh); }, []);
   useEffect(() => { if (activeNote) { setBody(activeNote.body); setTitle(activeNote.title); } }, [activeId, activeNote?.body, activeNote?.title]);
@@ -429,6 +432,11 @@ function Workspace() {
   }
   function pickFile(event) { importFiles([...event.target.files]); event.target.value = ''; }
   function selectResult(note) { openNote(note.id); setSearchOpen(false); }
+  function resizeSidebar(event) {
+    if (!sidebarResizing.current) return;
+    const maxWidth = Math.max(190, Math.min(480, window.innerWidth - 48 - 360));
+    setSidebarWidth(Math.max(190, Math.min(maxWidth, event.clientX - 48)));
+  }
 
   const backlinks = useMemo(() => activeNote ? vault.notes.filter(note => note.id !== activeNote.id && note.body.toLowerCase().includes(`[[${activeNote.title.toLowerCase()}`)) : [], [vault, activeNote]);
   const results = useMemo(() => {
@@ -437,7 +445,7 @@ function Workspace() {
   }, [vault, searchText]);
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
 
-  return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} onPointerDown={event => { if (mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); if (!event.target.closest('.tree-note')) setMode('read'); } }}>
+  return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` }} onPointerDown={event => { if (mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); if (!event.target.closest('.tree-note')) setMode('read'); } }}>
     <aside className="rail"><Link to="/" className="brand-mark" aria-label="Atelier Startseite" onClick={() => { setActiveId(null); setTabs([]); }}><span>a</span><i>.</i></Link><button className="rail-button active" title="Dateien" onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className="rail-button" title="Graph" onClick={() => setGraphOpen(true)}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
     <aside className="sidebar">
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span><select className="workspace-select" value={vault.id} aria-label="Vault auswählen" onChange={event => { if (event.target.value === '__new__') { setField(''); setDialog('vault'); } else { setVaultId(event.target.value); setActiveId(null); setTabs([]); } }}>
@@ -446,6 +454,12 @@ function Workspace() {
       <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onRenameFolder={renameFolder} onDeleteFolder={deleteFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote}/>
       <div className="sidebar-status"><span className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/><span>{auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span></div>
     </aside>
+    <div className="sidebar-resizer" role="separator" aria-label="Breite der Seitenleiste ändern" aria-orientation="vertical" aria-valuemin={190} aria-valuemax={480} aria-valuenow={sidebarWidth} tabIndex={0}
+      onPointerDown={event => { event.preventDefault(); event.stopPropagation(); sidebarResizing.current = true; event.currentTarget.setPointerCapture(event.pointerId); }}
+      onPointerMove={resizeSidebar}
+      onPointerUp={event => { event.stopPropagation(); sidebarResizing.current = false; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
+      onPointerCancel={() => { sidebarResizing.current = false; }}
+      onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setSidebarWidth(width => Math.max(190, Math.min(480, width + (event.key === 'ArrowRight' ? 12 : -12)))); } }}/>
     <main className="main-area">
       <header className="topbar"><div className="breadcrumbs"><span>{vault.name}</span><span className="crumb-sep">/</span><strong>{activeNote?.title || 'Willkommen'}</strong></div><div className="topbar-actions"><button className="button button-ghost top-action" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={16}/><span>Suchen</span><kbd>⌘ K</kbd></button><button className="button button-outline top-action" onClick={exportVault}><Share2 size={15}/> Exportieren</button></div></header>
       <div className="tabs">{tabs.map(id => { const note = vault.notes.find(item => item.id === id); return note && <button key={id} className={`tab${activeId === id ? ' active' : ''}`} onClick={() => openNote(id)}><FileText size={14}/><span>{note.title}</span><span role="button" aria-label="Tab schließen" className="tab-close" onClick={event => { event.stopPropagation(); setTabs(current => current.filter(tab => tab !== id)); if (activeId === id) { const next = tabs.filter(tab => tab !== id).at(-1); next ? openNote(next) : setActiveId(null); } }}>×</span></button>; })}</div>

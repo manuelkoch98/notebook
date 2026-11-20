@@ -57,7 +57,7 @@ export default function ProfileMenu() {
         <DropdownMenu.Item className="dropdown-item" onSelect={() => setDialog('profile')}><UserRound size={16}/> Profil</DropdownMenu.Item>
         <DropdownMenu.Item className="dropdown-item" onSelect={() => setDialog('settings')}><Settings2 size={16}/> Einstellungen</DropdownMenu.Item>
         <DropdownMenu.Separator className="menu-separator"/>
-        {auth.user ? <DropdownMenu.Item className="dropdown-item danger" onSelect={() => auth.signOut()}><LogOut size={16}/> Abmelden</DropdownMenu.Item> : auth.enabled && <DropdownMenu.Item className="dropdown-item" onSelect={() => navigate('/login')}><CircleUserRound size={16}/> Anmelden</DropdownMenu.Item>}
+        {auth.user ? <DropdownMenu.Item className="dropdown-item danger" onSelect={() => auth.signOut()}><LogOut size={16}/> Abmelden</DropdownMenu.Item> : <DropdownMenu.Item className="dropdown-item" onSelect={() => navigate('/login')}><CircleUserRound size={16}/> Anmelden</DropdownMenu.Item>}
       </DropdownMenu.Content>
     </DropdownMenu.Portal></DropdownMenu.Root>
     <Dialog.Root open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')}>

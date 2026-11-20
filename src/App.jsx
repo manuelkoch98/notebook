@@ -40,7 +40,7 @@ function AuthGate({ children }) {
 function LoginRoute() {
   const auth = useAuth();
   if (auth.loading) return <div className="page-loader"><span className="spinner"/> Verbindung zu Atelier …</div>;
-  if (!auth.enabled || auth.user) return <Navigate to="/" replace/>;
+  if (auth.user) return <Navigate to="/" replace/>;
   return <LoginPage/>;
 }
 
@@ -75,6 +75,7 @@ function Workspace() {
   const [, setProfileVersion] = useState(0);
   const editorRef = useRef(null);
   const noteInputRef = useRef(null);
+  const focusTitleRef = useRef(false);
   const vault = db.vaults.find(item => item.id === vaultId) || db.vaults[0];
   const activeNote = vault?.notes.find(note => note.id === activeId) || null;
   const dbRef = useRef(db);
@@ -85,6 +86,11 @@ function Workspace() {
   useEffect(() => { const update = () => setProfileVersion(value => value + 1); window.addEventListener('atelier-profile-updated', update); return () => window.removeEventListener('atelier-profile-updated', update); }, []);
   useEffect(() => { const refresh = () => setDb(current => ({ ...current, vaults: [...current.vaults] })); window.addEventListener('online', refresh); return () => window.removeEventListener('online', refresh); }, []);
   useEffect(() => { if (activeNote) { setBody(activeNote.body); setTitle(activeNote.title); } }, [activeId, activeNote?.body, activeNote?.title]);
+  useEffect(() => {
+    if (!activeNote || mode !== 'edit') return;
+    const frame = requestAnimationFrame(() => { (focusTitleRef.current ? noteInputRef.current : editorRef.current)?.focus(); focusTitleRef.current = false; });
+    return () => cancelAnimationFrame(frame);
+  }, [activeId, mode, activeNote]);
   useEffect(() => {
     if (!auth.user || !auth.db || !auth.firestoreSdk) { setCloudReady(false); setCloudStatus(auth.user ? 'Firebase wird verbunden …' : 'Lokal zwischengespeichert'); return; }
     const fs = auth.firestoreSdk;
@@ -115,7 +121,7 @@ function Workspace() {
         setDb(current => JSON.stringify(current) === JSON.stringify({ vaults: cloudVaults }) ? current : { vaults: cloudVaults });
         setVaultId(current => cloudVaults.some(item => item.id === current) ? current : cloudVaults[0].id);
         setCloudReady(true);
-        setCloudStatus('Mit Firebase synchronisiert');
+        setCloudStatus('Mit Cloud synchronisiert');
       }
     };
 
@@ -221,7 +227,7 @@ function Workspace() {
             }
           }
         }
-        setCloudStatus(conflictsSaved ? 'Konflikt gesichert: beide Textfassungen bleiben erhalten' : 'Mit Firebase synchronisiert');
+        setCloudStatus(conflictsSaved ? 'Konflikt gesichert: beide Textfassungen bleiben erhalten' : 'Mit Cloud synchronisiert');
       } catch (error) { setCloudStatus('Offline · Änderungen warten auf Synchronisierung'); }
     }, 450);
     return () => window.clearTimeout(timer);
@@ -242,7 +248,7 @@ function Workspace() {
     setDb(current => ({ ...current, vaults: current.vaults.map(item => item.id === vaultId ? updater(item) : item) }));
   }
   function notify(message) { setToast(message); window.setTimeout(() => setToast(''), 2300); }
-  function openNote(id, nextMode = 'read') {
+  function openNote(id, nextMode = 'edit') {
     const note = vault.notes.find(item => item.id === id); if (!note) return;
     setActiveId(id); setTitle(note.title); setBody(note.body); setTabs(current => current.includes(id) ? current : [...current, id]); setMode(nextMode); setSidebarOpen(false);
   }
@@ -370,15 +376,15 @@ function Workspace() {
       <div className="tabs">{tabs.map(id => { const note = vault.notes.find(item => item.id === id); return note && <button key={id} className={`tab${activeId === id ? ' active' : ''}`} onClick={() => openNote(id)}><FileText size={14}/><span>{note.title}</span><span role="button" aria-label="Tab schließen" className="tab-close" onClick={event => { event.stopPropagation(); setTabs(current => current.filter(tab => tab !== id)); if (activeId === id) { const next = tabs.filter(tab => tab !== id).at(-1); next ? openNote(next) : setActiveId(null); } }}>×</span></button>; })}</div>
       <div className="content-wrap">
         <section className="editor-pane" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note')) event.preventDefault(); }}>
-          {!activeNote ? <div className="welcome-view"><p className="eyebrow">DEIN DIGITALER GARTEN</p><h1>Hallo <em>{(profileGreeting || auth.user?.displayName || 'Manuel').trim().split(/\s+/)[0]}.</em></h1><p className="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p><div className="welcome-actions"><button className="button button-primary" onClick={createNote}><FilePlus2 size={16}/> Erste Notiz schreiben</button><button className="button button-outline" onClick={() => setDialog('import')}><Download size={15}/> Vault importieren</button></div><div className="welcome-divider"/><div className="recent-head"><div><p className="eyebrow">LOS GEHT’S</p><h2>Dein Arbeitsbereich</h2></div><span className="local-badge"><i/> {auth.user ? cloudReady ? 'In Firebase gespeichert' : cloudStatus : 'Lokal zwischengespeichert'}</span></div><div className="start-grid"><button className="start-card" onClick={createNote}><FilePlus2 size={18}/><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small></button><button className="start-card" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={18}/><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small></button><button className="start-card" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={18}/><strong>Schnell navigieren</strong><small>Befehle und Aktionen</small></button></div></div> : <article className="note-view" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note')) event.preventDefault(); }} onDrop={dropInEditor} onClick={event => { if (mode === 'read' && !event.target.closest('button,a')) setMode('edit'); }}>
-            <div className="note-heading"><div className="note-meta">{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'long',year:'numeric'}).format(new Date(activeNote.updated))}<span>·</span>{wordCount} Wörter</div><div className="note-actions"><button className="button button-ghost mode-toggle" onClick={() => setMode(current => current === 'edit' ? 'read' : 'edit')}>{mode === 'edit' ? 'Vorschau' : 'Bearbeiten'}</button><button className="icon-button" title="Umbenennen" onClick={() => { setMode('edit'); noteInputRef.current?.focus(); }}><Pencil size={15}/></button><button className="icon-button" title="Markdown exportieren" onClick={() => exportNote(activeNote)}><Download size={15}/></button></div></div>
-            {mode === 'edit' ? <><input ref={noteInputRef} className="note-title-input" value={title} onChange={event => setTitle(event.target.value)} onBlur={commitTitle} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitTitle(); event.currentTarget.blur(); } }}/><textarea ref={editorRef} className="markdown-editor" value={body} onChange={event => updateBody(event.target.value)} placeholder={'Schreib deinen Gedanken auf …\n\nTipp: Nutze #tags und [[Wikilinks]].'}/></> : <><h1 className="read-title">{activeNote.title}</h1><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><div onClick={() => setMode('edit')}><MarkdownPreview source={body} onWiki={resolveWiki}/></div></>}
+          {!activeNote ? <div className="welcome-view"><p className="eyebrow">DEIN DIGITALER GARTEN</p><h1>Hallo <em>{(profileGreeting || auth.user?.displayName || 'Manuel').trim().split(/\s+/)[0]}.</em></h1><p className="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p><div className="welcome-actions"><button className="button button-primary" onClick={createNote}><FilePlus2 size={16}/> Erste Notiz schreiben</button><button className="button button-outline" onClick={() => setDialog('import')}><Download size={15}/> Vault importieren</button></div><div className="welcome-divider"/><div className="recent-head"><div><p className="eyebrow">LOS GEHT’S</p><h2>Dein Arbeitsbereich</h2></div><span className="local-badge"><i/> {auth.user ? cloudReady ? 'Mit Cloud synchronisiert' : cloudStatus : 'Lokal zwischengespeichert'}</span></div><div className="start-grid"><button className="start-card" onClick={createNote}><FilePlus2 size={18}/><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small></button><button className="start-card" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={18}/><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small></button><button className="start-card" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={18}/><strong>Schnell navigieren</strong><small>Befehle und Aktionen</small></button></div></div> : <article className="note-view" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note')) event.preventDefault(); }} onDrop={dropInEditor} onClick={event => { if (mode === 'read' && !event.target.closest('button,a')) setMode('edit'); }}>
+            <div className="note-heading"><div className="note-meta">{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'long',year:'numeric'}).format(new Date(activeNote.updated))}<span>·</span>{wordCount} Wörter</div><div className="note-actions"><button className="button button-ghost mode-toggle" onClick={() => setMode(current => current === 'edit' ? 'read' : 'edit')}>{mode === 'edit' ? 'Vorschau' : 'Bearbeiten'}</button><button className="icon-button" title="Umbenennen" onClick={() => { if (mode === 'edit') noteInputRef.current?.focus(); else { focusTitleRef.current = true; setMode('edit'); } }}><Pencil size={15}/></button><button className="icon-button" title="Markdown exportieren" onClick={() => exportNote(activeNote)}><Download size={15}/></button></div></div>
+            {mode === 'edit' ? <><input ref={noteInputRef} className="note-title-input read-title" value={title} onChange={event => setTitle(event.target.value)} onBlur={commitTitle} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitTitle(); event.currentTarget.blur(); } }}/><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><textarea ref={editorRef} className="markdown-editor" value={body} onChange={event => updateBody(event.target.value)} placeholder={'Schreib deinen Gedanken auf …\n\nTipp: Nutze #tags und [[Wikilinks]].'}/></> : <><h1 className="read-title">{activeNote.title}</h1><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><div onClick={() => setMode('edit')}><MarkdownPreview source={body} onWiki={resolveWiki}/></div></>}
             <div className="editor-footer"><span><i className="status-dot"/> Alle Änderungen gespeichert</span><span>Markdown · UTF-8</span></div>
           </article>}
         </section>
         <aside className="right-sidebar"><div className="right-head"><span>NOTIZ-DETAILS</span><CircleHelp size={15}/></div>{activeNote ? <><div className="detail-section"><span>BACKLINKS</span>{backlinks.length ? backlinks.map(note => <button key={note.id} className="detail-link" onClick={() => openNote(note.id)}>{note.title}</button>) : <p>Noch keine Rückverweise</p>}</div><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activeNote.path}</p></div><div className="detail-section"><span>WORTANZAHL</span><p>{wordCount} Wörter</p></div></> : <div className="right-empty"><div className="detail-orbit">✳</div><strong>Alles an seinem Platz</strong><p>Öffne eine Notiz, um ihre Details und Verbindungen zu sehen.</p></div>}</aside>
       </div>
-      <footer className="statusbar"><span><i className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/> {auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span><span>{activeNote ? `${activeNote.title} · ${auth.user && cloudReady ? 'Firebase' : 'lokal'}` : 'Willkommen in Atelier'}</span><span>Markdown · UTF-8</span></footer>
+      <footer className="statusbar"><span><i className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/> {auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span><span>{activeNote ? `${activeNote.title} · ${auth.user && cloudReady ? 'Cloud' : 'lokal'}` : 'Willkommen in Atelier'}</span><span>Markdown · UTF-8</span></footer>
     </main>
 
     <DialogFrame open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')} title={dialog === 'folder' ? 'Neuer Ordner' : dialog === 'vault' ? 'Neuer Vault' : 'Markdown-Vault importieren'} description={dialog === 'import' ? 'Wähle einen Ordner oder mehrere Markdown-Dateien aus.' : 'Gib einen Namen ein, um fortzufahren.'}>

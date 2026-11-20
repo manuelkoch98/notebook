@@ -36,7 +36,7 @@ export default function LoginPage() {
   }
 
   return <main className="auth-page">
-    <Link to="/login" className="auth-wordmark"><span className="brand-dot">a<span>.</span></span><span>Atelier</span></Link>
+    <Link to="/login" className="auth-wordmark"><span className="brand-mark auth-brand-mark"><span>a</span><i>.</i></span><span>Atelier</span></Link>
     <section className="auth-card">
       <div className="auth-heading"><p className="eyebrow">DEIN PERSÖNLICHER WISSENSGARTEN</p><h1>{create ? 'Konto erstellen' : 'Willkommen zurück'}</h1><p>{create ? 'Richte deinen Zugang zu Atelier ein.' : 'Melde dich an, um deinen Wissensgarten zu öffnen.'}</p></div>
       <button className="button button-outline google-button" disabled={busy || !auth.sdk} onClick={() => run(auth.signInGoogle)}>{googleIcon}<span>Mit Google fortfahren</span></button>

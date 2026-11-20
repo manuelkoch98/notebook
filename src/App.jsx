@@ -299,6 +299,26 @@ function Workspace() {
     updateVault(current => ({ ...current, notes: current.notes.map(note => note.id === id ? { ...note, path: `${folder ? `${folder}/` : ''}${note.path.split('/').pop()}`, updated: Date.now() } : note) }));
     notify(folder ? `In „${folder}“ verschoben` : 'Auf die Hauptebene verschoben');
   }
+  function moveFolder(source, destination) {
+    if (!vault.folders.includes(source)) return;
+    if (destination === source || destination.startsWith(`${source}/`)) return notify('Ein Ordner kann nicht in sich selbst verschoben werden.');
+    const nextRoot = `${destination ? `${destination}/` : ''}${source.split('/').pop()}`;
+    if (nextRoot === source) return;
+    const movingFolders = vault.folders.filter(folder => folder === source || folder.startsWith(`${source}/`));
+    const movedFolderPaths = new Map(movingFolders.map(folder => [folder, `${nextRoot}${folder.slice(source.length)}`]));
+    const movingNotes = vault.notes.filter(note => note.path.startsWith(`${source}/`));
+    const movedNotePaths = new Map(movingNotes.map(note => [note.id, `${nextRoot}${note.path.slice(source.length)}`]));
+    const existingFolders = new Set(vault.folders.filter(folder => !movedFolderPaths.has(folder)).map(folder => folder.toLocaleLowerCase()));
+    if ([...movedFolderPaths.values()].some(folder => existingFolders.has(folder.toLocaleLowerCase()))) return notify('An dieser Stelle gibt es bereits einen gleichnamigen Ordner.');
+    const existingNotes = new Set(vault.notes.filter(note => !movedNotePaths.has(note.id)).map(note => note.path.toLocaleLowerCase()));
+    if ([...movedNotePaths.values()].some(path => existingNotes.has(path.toLocaleLowerCase()))) return notify('An dieser Stelle gibt es bereits eine gleichnamige Notiz.');
+    updateVault(current => ({
+      ...current,
+      folders: current.folders.map(folder => movedFolderPaths.get(folder) || folder),
+      notes: current.notes.map(note => movedNotePaths.has(note.id) ? { ...note, path: movedNotePaths.get(note.id), updated: Date.now() } : note)
+    }));
+    notify(destination ? `Ordner nach „${destination}“ verschoben` : 'Ordner auf die Hauptebene verschoben');
+  }
   function addFolder() {
     const name = cleanTitle(field.trim()); if (!field.trim()) return;
     updateVault(current => ({ ...current, folders: [...new Set([...current.folders, name])] })); setField(''); setDialog(''); notify(`Ordner „${name}“ erstellt`);
@@ -327,9 +347,9 @@ function Workspace() {
     setDialog('');
     notify(`${imported.length} Datei(en) importiert`);
   }
-  function dragStart(event, note) {
-    event.dataTransfer.setData('application/x-atelier-note', note.id);
-    event.dataTransfer.setData('text/plain', `[[${note.title}]]`);
+  function dragStart(event, item, kind = 'note') {
+    if (kind === 'folder') { event.dataTransfer.setData('application/x-atelier-folder', item); event.dataTransfer.setData('text/plain', item); }
+    else { event.dataTransfer.setData('application/x-atelier-note', item.id); event.dataTransfer.setData('text/plain', `[[${item.title}]]`); }
     event.dataTransfer.effectAllowed = 'copyMove';
   }
   function dropInEditor(event) {
@@ -368,7 +388,7 @@ function Workspace() {
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span><select className="workspace-select" value={vault.id} aria-label="Vault auswählen" onChange={event => { if (event.target.value === '__new__') { setField(''); setDialog('vault'); } else { setVaultId(event.target.value); setActiveId(null); setTabs([]); } }}>
         {db.vaults.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="__new__">＋ Neuer Vault</option>
       </select></div><button className="icon-button" aria-label="Neuen Vault erstellen" title="Neuen Vault erstellen" onClick={() => { setField(''); setDialog('vault'); }}><Plus size={19}/></button></div>
-      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart}/>
+      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder}/>
       <div className="sidebar-status"><span className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/><span>{auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span></div>
     </aside>
     <main className="main-area">

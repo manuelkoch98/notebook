@@ -1,31 +1,76 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as Dialog from '@radix-ui/react-dialog';
 import { CircleUserRound, LogOut, Settings2, UserRound, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider.jsx';
 
+function splitName(displayName = '') {
+  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  return { first: parts[0] || '', last: parts.slice(1).join(' ') };
+}
+
 export default function ProfileMenu() {
   const auth = useAuth();
   const navigate = useNavigate();
   const [dialog, setDialog] = useState('');
-  const user = auth.user;
-  const initial = (user?.displayName || user?.email || 'M').trim().charAt(0).toUpperCase();
+  const profileStorageKey = auth.user ? `atelier-profile-v1:${auth.user.uid}` : 'atelier-profile-v1:local';
+  const nameStorageKey = auth.user ? `atelier-profile-name:${auth.user.uid}` : 'atelier-profile-name:local';
+  const savedProfile = (() => { try { return JSON.parse(localStorage.getItem(profileStorageKey) || '{}'); } catch { return {}; } })();
+  const initial = splitName(auth.user?.displayName || localStorage.getItem(nameStorageKey) || '');
+  const [firstName, setFirstName] = useState(savedProfile.firstName || initial.first);
+  const [lastName, setLastName] = useState(savedProfile.lastName || initial.last);
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const displayName = [firstName, lastName].filter(Boolean).join(' ');
+  const initialLetter = (displayName || auth.user?.email || 'M').trim().charAt(0).toUpperCase();
+
+  useEffect(() => {
+    if (dialog !== 'profile') return;
+    const parsed = splitName(auth.user?.displayName || localStorage.getItem(nameStorageKey) || '');
+    setFirstName(savedProfile.firstName || parsed.first);
+    setLastName(savedProfile.lastName || parsed.last);
+    setNotice('');
+  }, [dialog]);
+
+  async function saveProfile(event) {
+    event.preventDefault();
+    const cleanFirst = firstName.trim();
+    const cleanLast = lastName.trim();
+    if (!cleanFirst) { setNotice('Bitte gib deinen Vornamen ein.'); return; }
+    setSaving(true); setNotice('');
+    try {
+      localStorage.setItem(profileStorageKey, JSON.stringify({ firstName: cleanFirst, lastName: cleanLast }));
+      localStorage.setItem(nameStorageKey, [cleanFirst, cleanLast].filter(Boolean).join(' '));
+      if (auth.user) await auth.updateProfile([cleanFirst, cleanLast].filter(Boolean).join(' '));
+      setFirstName(cleanFirst); setLastName(cleanLast); setNotice('Profil gespeichert.');
+      window.dispatchEvent(new CustomEvent('atelier-profile-updated'));
+    } catch { setNotice('Profil konnte nicht gespeichert werden. Bitte prüfe deine Verbindung.'); }
+    finally { setSaving(false); }
+  }
+
   return <>
-    <DropdownMenu.Root><DropdownMenu.Trigger asChild><button className="profile-trigger" aria-label="Profil und Konto" title="Profil und Konto">{user?.photoURL ? <img src={user.photoURL} alt=""/> : initial}</button></DropdownMenu.Trigger><DropdownMenu.Portal>
+    <DropdownMenu.Root><DropdownMenu.Trigger asChild><button className="profile-trigger" aria-label="Profil und Konto" title="Profil und Konto">{auth.user?.photoURL ? <img src={auth.user.photoURL} alt=""/> : initialLetter}</button></DropdownMenu.Trigger><DropdownMenu.Portal>
       <DropdownMenu.Content className="dropdown-menu profile-dropdown" side="top" align="end" sideOffset={8}>
-        <div className="profile-menu-head"><span className="profile-small-avatar">{initial}</span><div><strong>{user?.displayName || 'Mein Profil'}</strong><span>{user?.email || 'Lokaler Arbeitsbereich'}</span></div></div>
+        <div className="profile-menu-head"><span className="profile-small-avatar">{initialLetter}</span><div><strong>{displayName || auth.user?.email || 'Mein Profil'}</strong><span>{auth.user?.email || 'Lokaler Arbeitsbereich'}</span></div></div>
         <DropdownMenu.Separator className="menu-separator"/>
         <DropdownMenu.Item className="dropdown-item" onSelect={() => setDialog('profile')}><UserRound size={16}/> Profil</DropdownMenu.Item>
         <DropdownMenu.Item className="dropdown-item" onSelect={() => setDialog('settings')}><Settings2 size={16}/> Einstellungen</DropdownMenu.Item>
         <DropdownMenu.Separator className="menu-separator"/>
-        {user ? <DropdownMenu.Item className="dropdown-item danger" onSelect={() => auth.signOut()}><LogOut size={16}/> Abmelden</DropdownMenu.Item> : auth.enabled && <DropdownMenu.Item className="dropdown-item" onSelect={() => navigate('/login')}><CircleUserRound size={16}/> Anmelden</DropdownMenu.Item>}
+        {auth.user ? <DropdownMenu.Item className="dropdown-item danger" onSelect={() => auth.signOut()}><LogOut size={16}/> Abmelden</DropdownMenu.Item> : auth.enabled && <DropdownMenu.Item className="dropdown-item" onSelect={() => navigate('/login')}><CircleUserRound size={16}/> Anmelden</DropdownMenu.Item>}
       </DropdownMenu.Content>
     </DropdownMenu.Portal></DropdownMenu.Root>
     <Dialog.Root open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')}>
       <Dialog.Portal><Dialog.Overlay className="dialog-overlay"/><Dialog.Content className="dialog-content">
-        <div className="dialog-titlebar"><div><Dialog.Title>{dialog === 'profile' ? 'Profil' : 'Einstellungen'}</Dialog.Title><Dialog.Description>{dialog === 'profile' ? 'Kontoinformationen für Atelier.' : 'Arbeitsbereich und Tastenkürzel.'}</Dialog.Description></div><Dialog.Close asChild><button className="icon-button" aria-label="Schließen"><X size={16}/></button></Dialog.Close></div>
-        {dialog === 'profile' ? <div className="profile-details"><span className="profile-large-avatar">{initial}</span><div><strong>{user?.displayName || 'Manuel Koch'}</strong><span>{user?.email || 'Lokaler Modus'}</span></div><div className="settings-row"><span>Speicher</span><span>{user ? 'Angemeldet · lokal gespeichert' : 'Lokal auf diesem Gerät'}</span></div></div> : <div className="profile-details"><div className="settings-row"><span>Neue Notiz</span><kbd>⌘ / Ctrl + N</kbd></div><div className="settings-row"><span>Befehlspalette</span><kbd>⌘ / Ctrl + K</kbd></div><div className="settings-row"><span>Suche</span><kbd>⌘ / Ctrl + Shift + F</kbd></div></div>}
+        <div className="dialog-titlebar"><div><Dialog.Title>{dialog === 'profile' ? 'Profil' : 'Einstellungen'}</Dialog.Title><Dialog.Description>{dialog === 'profile' ? 'Dein Name wird im Arbeitsbereich angezeigt.' : 'Arbeitsbereich und Tastenkürzel.'}</Dialog.Description></div><Dialog.Close asChild><button className="icon-button" aria-label="Schließen"><X size={16}/></button></Dialog.Close></div>
+        {dialog === 'profile' ? <form className="profile-form" onSubmit={saveProfile}>
+          <div className="profile-avatar-preview">{initialLetter}</div>
+          <label>Vorname<input autoComplete="given-name" value={firstName} onChange={event => setFirstName(event.target.value)} placeholder="Vorname"/></label>
+          <label>Nachname<input autoComplete="family-name" value={lastName} onChange={event => setLastName(event.target.value)} placeholder="Nachname"/></label>
+          {auth.user && <p className="profile-email">{auth.user.email}</p>}
+          {notice && <p className="profile-notice" role="status">{notice}</p>}
+          <button className="button button-primary" disabled={saving}>{saving ? 'Speichert …' : 'Profil speichern'}</button>
+        </form> : <div className="profile-details"><div className="settings-row"><span>Neue Notiz</span><kbd>⌘ / Ctrl + N</kbd></div><div className="settings-row"><span>Befehlspalette</span><kbd>⌘ / Ctrl + K</kbd></div><div className="settings-row"><span>Suche</span><kbd>⌘ / Ctrl + Shift + F</kbd></div></div>}
       </Dialog.Content></Dialog.Portal>
     </Dialog.Root>
   </>;

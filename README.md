@@ -1,6 +1,6 @@
 # Atelier — persönliche Markdown-Wissenswerkstatt
 
-Eine eigenständig gestaltete, browserbasierte Notiz-App. Der erste Abschnitt speichert Vaults und Markdown-Notizen lokal im Browser. Firebase, sichere Regeln, ZIP-Roundtrip, Desktop-Installer und kollaborationssichere Synchronisierung sind noch Arbeitsstände, keine fertigen Funktionen.
+Eine eigenständig gestaltete, browserbasierte Notiz-App. Nach Anmeldung ist Firestore der primäre Speicher für Vaults und Markdown-Notizen. Firebase Offline-Persistenz und ein nutzerbezogener Browser-Cache unterstützen Offline-Arbeit. Die Cloud-Verbindung ist implementiert, wurde aber noch nicht mit einem echten Konto oder im Emulator Ende-zu-Ende abgenommen.
 
 ## Aufbau der Oberfläche
 
@@ -14,7 +14,7 @@ Voraussetzungen: Node.js 20.19+ oder Node.js 22.12+. Im Projektordner:
 npm run dev
 ```
 
-Dann `http://localhost:4178` öffnen. Die Login-Seite ist `http://localhost:4178/login`. Vite liefert `/login` direkt an den React Router aus. Die PWA benötigt localhost oder HTTPS. Daten verbleiben derzeit in `localStorage` des Browsers und sind noch nicht über Firebase synchronisiert.
+Dann `http://localhost:4178` öffnen. Die Login-Seite ist `http://localhost:4178/login`. Vite liefert `/login` direkt an den React Router aus. Die PWA benötigt localhost oder HTTPS. Bei Anmeldung lädt und speichert die App Vaults/Notizen in Firestore; pro Firebase-Nutzer gibt es zusätzlich einen lokalen Browsercache für Offline-Arbeit. Ohne Anmeldung dient der lokale Modus nur als Vorschau.
 
 ## Firebase
 
@@ -22,13 +22,13 @@ Das Client-Konfigurationsmuster liegt in `.env.example`; daraus eine lokale `.en
 
 Firestore-/Storage-Regeln liegen in `firebase/`. Sie sperren den Zugriff auf `users/{uid}/vaults/{vaultId}` für angemeldete Nutzer auf genau die eigene UID. Die Emulator-Konfiguration liegt in `firebase.json`; `npm run test:rules` erstellt zwei kurzlebige Konten und prüft, dass das zweite Konto den fremden Vault nicht lesen oder ändern kann. Dafür werden Node.js und ein verwendbares Java JDK benötigt; Firebase dokumentiert JDK 11+ und weist auf Java 21 für kommende Firestore-Emulator-Versionen hin.
 
-Die Web-Anmeldung nutzt Firebase Authentication mit Google und E-Mail/Passwort. Die vom Nutzer bereitgestellte Web-Konfiguration liegt lokal in `.env.local` (wird ignoriert und nicht committet). `npm run build` schreibt daraus `dist/firebase-config.js`; Vercel muss dieselben `VITE_FIREBASE_*`-Werte und `VITE_CLOUD_ENABLED=true` als Build-Variablen erhalten. In der Firebase Console müssen Google und E-Mail/Passwort als Anmeldeanbieter aktiviert sein; die Vercel-Domain muss unter Authentication → Settings → Authorized domains stehen. **Die Anmeldung ist eingebunden. Firestore-Synchronisierung und Cloud-Anhänge sind noch nicht implementiert; Notizen bleiben vorerst lokal.**
+Die Web-Anmeldung nutzt Firebase Authentication mit Google und E-Mail/Passwort. Die vom Nutzer bereitgestellte Web-Konfiguration liegt lokal in `.env.local` (wird ignoriert und nicht committet). `npm run build` schreibt daraus `dist/firebase-config.js`; Vercel muss dieselben `VITE_FIREBASE_*`-Werte und `VITE_CLOUD_ENABLED=true` als Build-Variablen erhalten. In der Firebase Console müssen Google und E-Mail/Passwort als Anmeldeanbieter aktiviert sein; die Vercel-Domain muss unter Authentication → Settings → Authorized domains stehen. **Anmeldung, Firestore-Synchronisierung, nutzerbezogener Offline-Cache und wiederherstellbare Konfliktkopien sind im Client implementiert. Ein echter Firebase-Login, Mehrgeräte-Sync und Emulatorabnahme wurden auf diesem Stand noch nicht verifiziert. Anhänge in Cloud Storage sind noch nicht implementiert.**
 
 Geplantes Datenmodell: `users/{uid}/vaults/{vaultId}` (Metadaten), darunter `notes/{noteId}` mit Markdown-Text, Pfad, Revision und Änderungszeit; Anhänge unter `users/{uid}/vaults/{vaultId}/attachments/{attachmentId}`. Konfliktstrategie: bei konkurrierender Basisrevision beide Fassungen als wiederherstellbare Konfliktnotiz speichern, nie still überschreiben.
 
 ## Vercel
 
-Vercel → Add New → Project → privates GitHub-Repository importieren. Framework Preset „Vite“, Build Command `npm run build`, Output Directory `dist`. `vercel.json` schreibt Client-Routen wie `/login` auf `index.html` um und setzt PWA-Header. Die `VITE_FIREBASE_*`-Werte als Production/Preview/Development Environment Variables und `VITE_CLOUD_ENABLED=true` setzen. Nutzerverwaltung ist vorbereitet; die Web-App ist noch nicht für echte Notiz-Cloud-Synchronisierung bereit.
+Vercel → Add New → Project → privates GitHub-Repository importieren. Framework Preset „Vite“, Build Command `npm run build`, Output Directory `dist`. `vercel.json` schreibt Client-Routen wie `/login` auf `index.html` um und setzt PWA-Header. Die `VITE_FIREBASE_*`-Werte als Production/Preview/Development Environment Variables und `VITE_CLOUD_ENABLED=true` setzen. Nutzerverwaltung und Firestore-Synchronisierung sind vorbereitet. Die Firebase-Anbieter sowie die Firestore-Regeln müssen in der Console aktiviert/veröffentlicht sein; Live-Sync wurde noch nicht abgenommen.
 
 ## Desktop
 

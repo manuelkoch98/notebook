@@ -51,7 +51,7 @@ export default function LoginPage() {
       <div className="auth-footer"><button className="link-button" onClick={() => { setCreate(!create); setNotice(''); }}>{create ? 'Zur Anmeldung' : 'Konto erstellen'}</button><button className="link-button" onClick={() => run(() => email ? auth.resetPassword(email) : Promise.reject({ code: 'missing-email' }))}>Passwort vergessen?</button></div>
       {notice && <p role="alert" className="form-notice">{notice}</p>}
       {auth.error && <p role="alert" className="form-notice">{auth.error}</p>}
-      <p className="auth-footnote">Notizen bleiben bis zur Einrichtung der Cloud-Synchronisierung auf diesem Gerät.</p>
+      <p className="auth-footnote">Deine Notizen werden in deinem privaten Firebase-Konto gespeichert und für Offline-Arbeit zwischengespeichert.</p>
     </section>
     <span className="auth-copyright">ATELIER · DEIN RUHIGER ORT FÜR GEDANKEN</span>
   </main>;

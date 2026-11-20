@@ -12,12 +12,16 @@ export function AuthProvider({ children }) {
     let disposed = false;
     Promise.all([
       import('https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js'),
-      import('https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js')
-    ]).then(([appSdk, sdk]) => {
+      import('https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js'),
+      import('https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js')
+    ]).then(([appSdk, sdk, firestoreSdk]) => {
       if (disposed) return;
       const app = appSdk.initializeApp(config.config);
       const auth = sdk.getAuth(app);
-      setAuthState(current => ({ ...current, auth, sdk }));
+      let db;
+      try { db = firestoreSdk.initializeFirestore(app, { localCache: firestoreSdk.persistentLocalCache({ tabManager: firestoreSdk.persistentMultipleTabManager() }) }); }
+      catch { db = firestoreSdk.getFirestore(app); }
+      setAuthState(current => ({ ...current, auth, sdk, db, firestoreSdk }));
       unsubscribe = sdk.onAuthStateChanged(auth, user => setAuthState(current => ({ ...current, loading: false, user })));
     }).catch(() => setAuthState(current => ({ ...current, loading: false, error: 'Firebase konnte nicht geladen werden. Prüfe die Verbindung und Konfiguration.' })));
     return () => { disposed = true; unsubscribe?.(); };
@@ -28,7 +32,8 @@ export function AuthProvider({ children }) {
     signInEmail: (email, password) => authState.sdk.signInWithEmailAndPassword(authState.auth, email, password),
     createAccount: (email, password) => authState.sdk.createUserWithEmailAndPassword(authState.auth, email, password),
     resetPassword: email => authState.sdk.sendPasswordResetEmail(authState.auth, email),
-    signOut: () => authState.sdk.signOut(authState.auth)
+    signOut: () => authState.sdk.signOut(authState.auth),
+    updateProfile: (displayName) => authState.sdk.updateProfile(authState.auth.currentUser, { displayName })
   }), [authState]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,3 +1,5 @@
+import './components/app-ui.js';
+
 (() => {
   const DB_KEY = 'atelier-db-v1';
   const SHORTCUT_KEY = 'atelier-shortcuts-v1';

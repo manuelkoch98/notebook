@@ -32,7 +32,7 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 | Canvas | Offen | Matrix | Obsidian-Canvas-JSON-Import/Export nicht implementiert |
 | Bases | Offen | Matrix | `.base`-Format, Views und Formeln nicht implementiert |
 | Themes, Plugins, Snippets | Offen | separat zu prüfen | Community-Plugin-APIs sind derzeit nicht kompatibel; keine Sandbox-/API-Schicht |
-| Firebase Authentication | Offen | Emulator erforderlich | Anmeldung und Sitzungsverwaltung fehlen |
+| Firebase Authentication | Google + E-Mail/Passwort eingebunden | Browser: Login-Ansicht; Firebase 13.4.0 SDK geladen | Firebase Console muss beide Anbieter und produktive Domain freischalten; Testanmeldung noch offen |
 | Firestore-Synchronisierung | Offen | Emulator erforderlich | Merge-Queue, Offline-Änderungen und Konfliktkopien fehlen |
 | Cloud Storage | Offen | Emulator erforderlich | Dateiupload/-download und Regeln vorbereitet, Client fehlt |
 | Nutzer-/Vault-Sicherheitsregeln | Regeln + Emulator-Test vorbereitet | `npm run test:rules` gestartet, Emulatorstart scheiterte | Java-Binärdatei ist auf diesem Mac nur ein JRE-Hinweis ohne Runtime; außerdem blockiert DNS den Firebase-CLI-Remote-Aufruf. Firestore/Storage-Regeln noch nicht empirisch bestätigt |
@@ -49,4 +49,4 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 
 ## Funktionsprüfungen
 
-Manuelle Browser-Abnahme am 20.11.2026: Notiz anlegen, Markdown bearbeiten, Vorschau, Wikilink öffnen, Zielnotiz umbenennen (eingehender Link aktualisiert), Volltext suchen; alles bestätigt. `npm run check` und `npm run build` erfolgreich. Manifest, beide PNG-Icons und aktiver Service Worker geprüft. `npm run test:rules` wurde versucht, aber Emulatorstart scheiterte: Java meldet, dass keine Java-Runtime vorhanden ist, und der Firebase CLI Remote-Aufruf scheitert an DNS. ZIP-Roundtrip, Import/Export mit Testvault, erfolgreiche Firebase Emulator-Prüfung, Offline-/Mehrgeräte-Sync und Desktop-Installer wurden nicht geprüft.
+Manuelle Browser-Abnahme am 20.11.2026: Notiz anlegen, Markdown bearbeiten, Vorschau, Wikilink öffnen, Zielnotiz umbenennen (eingehender Link aktualisiert), Volltext suchen; alles bestätigt. Nach UI-Korrektur zusätzlich: Google-/E-Mail-Login-Ansicht, Sidebar-Aktionslayout, Ordnerdialog/-einklappen sowie Klick Vorschau → Bearbeiten und Klick außerhalb → Vorschau geprüft. Firebase-SDK-Module laden im Browser. `npm run check` und `npm run build` erfolgreich. Manifest, beide PNG-Icons und aktiver Service Worker geprüft. `npm run test:rules` wurde versucht, aber Emulatorstart scheiterte: Java meldet, dass keine Java-Runtime vorhanden ist, und der Firebase CLI Remote-Aufruf scheitert an DNS. ZIP-Roundtrip, Import/Export mit Testvault, erfolgreiche Firebase Emulator-Prüfung, tatsächliche Anmeldung, Offline-/Mehrgeräte-Sync und Desktop-Installer wurden nicht geprüft.

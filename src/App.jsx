@@ -251,7 +251,7 @@ function Workspace() {
     setDb(current => ({ ...current, vaults: current.vaults.map(item => item.id === vaultId ? updater(item) : item) }));
   }
   function notify(message) { setToast(message); window.setTimeout(() => setToast(''), 2300); }
-  function openNote(id, nextMode = 'edit') {
+  function openNote(id, nextMode = mode) {
     if (mode === 'edit') commitTitle();
     const note = vault.notes.find(item => item.id === id); if (!note) return;
     setActiveId(id); setTitle(note.title); setBody(note.body); setTabs(current => current.includes(id) ? current : [...current, id]); setMode(nextMode); setSidebarOpen(false);

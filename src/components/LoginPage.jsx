@@ -54,7 +54,6 @@ export default function LoginPage() {
       {!auth.enabled && <p role="alert" className="form-notice">Firebase-Anmeldung ist für diese App-Instanz nicht konfiguriert. Bitte prüfe die Firebase-Umgebungsvariablen.</p>}
       {notice && <p role="alert" className="form-notice">{notice}</p>}
       {auth.error && <p role="alert" className="form-notice">{auth.error}</p>}
-      <p className="auth-footnote">Deine Notizen werden in deinem privaten Firebase-Konto gespeichert und für Offline-Arbeit zwischengespeichert.</p>
     </section>
     {!isDesktopApp && <section className="desktop-downloads" aria-label="atelier Desktop herunterladen">
       <p>atelier für deinen Desktop</p>

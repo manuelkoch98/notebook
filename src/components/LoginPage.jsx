@@ -57,7 +57,7 @@ export default function LoginPage() {
     </section>
     {!isDesktopApp && <section className="desktop-downloads" aria-label="atelier Desktop herunterladen">
       <p>atelier für deinen Desktop</p>
-      <div><a className="button button-outline" href="https://github.com/manuelkoch98/notebook/releases/latest/download/atelier-darwin-aarch64.dmg"><Download size={15}/> macOS · DMG</a><a className="button button-outline" href="https://github.com/manuelkoch98/notebook/releases/latest/download/atelier-windows-x86_64-setup.exe"><Download size={15}/> Windows · EXE</a></div>
+      <div><a className="button button-outline" href="https://github.com/manuelkoch98/notebook/releases/latest/download/atelier-darwin-aarch64.dmg"><Download size={15}/> macOS · DMG</a><a className="button button-outline" href="https://github.com/manuelkoch98/notebook/releases/latest/download/atelier-windows-x64-setup.exe"><Download size={15}/> Windows · EXE</a></div>
       <small>Direkter Download aus dem neuesten GitHub-Release. Das private Repository erfordert GitHub-Zugriff.</small>
     </section>}
     <span className="auth-copyright">atelier · DEIN RUHIGER ORT FÜR GEDANKEN</span>

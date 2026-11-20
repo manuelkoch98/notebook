@@ -348,6 +348,19 @@ function Workspace() {
     }));
     notify(destination ? `Ordner nach „${destination}“ verschoben` : 'Ordner auf die Hauptebene verschoben');
   }
+  function reorderFolder(source, target, after) {
+    if (source === target || parentPath(source) !== parentPath(target)) return;
+    const parent = parentPath(source);
+    const siblings = vault.folders.filter(folder => parentPath(folder) === parent);
+    const from = siblings.indexOf(source);
+    const to = siblings.indexOf(target);
+    if (from < 0 || to < 0) return;
+    siblings.splice(from, 1);
+    const targetIndex = siblings.indexOf(target);
+    siblings.splice(targetIndex + (after ? 1 : 0), 0, source);
+    let index = 0;
+    updateVault(current => ({ ...current, folders: current.folders.map(folder => parentPath(folder) === parent ? siblings[index++] : folder) }));
+  }
   function renameFolder(source, rawName) {
     const name = cleanTitle(rawName);
     const nextRoot = `${parentPath(source) ? `${parentPath(source)}/` : ''}${name}`;
@@ -451,7 +464,7 @@ function Workspace() {
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span><select className="workspace-select" value={vault.id} aria-label="Vault auswählen" onChange={event => { if (event.target.value === '__new__') { setField(''); setDialog('vault'); } else { setVaultId(event.target.value); setActiveId(null); setTabs([]); } }}>
         {db.vaults.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="__new__">＋ Neuer Vault</option>
       </select></div><button className="icon-button" aria-label="Neuen Vault erstellen" title="Neuen Vault erstellen" onClick={() => { setField(''); setDialog('vault'); }}><Plus size={19}/></button></div>
-      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onRenameFolder={renameFolder} onDeleteFolder={deleteFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote}/>
+      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onRenameFolder={renameFolder} onDeleteFolder={deleteFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote} onReorderFolder={reorderFolder}/>
       <div className="sidebar-status"><span className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/><span>{auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span></div>
     </aside>
     <div className="sidebar-resizer" role="separator" aria-label="Breite der Seitenleiste ändern" aria-orientation="vertical" aria-valuemin={190} aria-valuemax={480} aria-valuenow={sidebarWidth} tabIndex={0}

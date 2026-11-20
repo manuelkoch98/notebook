@@ -8,6 +8,7 @@ const basename = path => path.slice(path.lastIndexOf('/') + 1);
 const NOTE_MIME = 'application/x-atelier-note';
 const FOLDER_MIME = 'application/x-atelier-folder';
 const hasFileDrag = event => event.dataTransfer.types.includes(NOTE_MIME) || event.dataTransfer.types.includes(FOLDER_MIME);
+const folderDropEdge = event => { const rect = event.currentTarget.getBoundingClientRect(); const position = (event.clientY - rect.top) / rect.height; return position < .25 ? 'before' : position > .75 ? 'after' : ''; };
 
 function ActionMenuItems({ Menu, children }) {
   const Item = Menu.Item;
@@ -19,17 +20,19 @@ function ActionMenuItems({ Menu, children }) {
   return children({ Item, Sub, SubTrigger, Portal, SubContent, Separator });
 }
 
-function FolderRow({ folder, depth, collapsed, toggle, dropTarget, folders, onMove, onMoveFolder, onRenameFolder, onDeleteFolder, onCreateNote, onCreateFolder, onDragStart, onDragEnd, canDropOn, onSetDropTarget }) {
+function FolderRow({ folder, depth, collapsed, toggle, dropTarget, draggedFolder, folders, onMove, onMoveFolder, onReorderFolder, onRenameFolder, onDeleteFolder, onCreateNote, onCreateFolder, onDragStart, onDragEnd, canDropOn, onSetDropTarget }) {
   const isCollapsed = collapsed.has(folder);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(basename(folder));
   function startRename() { setDraft(basename(folder)); setRenaming(true); }
   function finishRename() { const next = draft.trim(); if (next && next !== basename(folder)) onRenameFolder(folder, next); setRenaming(false); }
-  const row = <div role="treeitem" aria-expanded={!isCollapsed} tabIndex={0} className={`tree-folder${dropTarget === folder ? ' drop-target' : ''}`} style={{ '--tree-depth': depth }} data-folder-path={folder} draggable={!renaming} onDragStart={event => onDragStart(event, folder, 'folder')} onDragEnd={onDragEnd}
+  const dropBefore = dropTarget === `folder:${folder}:before`;
+  const dropAfter = dropTarget === `folder:${folder}:after`;
+  const row = <div role="treeitem" aria-expanded={!isCollapsed} tabIndex={0} className={`tree-folder${dropTarget === folder ? ' drop-target' : ''}${dropBefore ? ' drop-before' : ''}${dropAfter ? ' drop-after' : ''}`} style={{ '--tree-depth': depth }} data-folder-path={folder} draggable={!renaming} onDragStart={event => onDragStart(event, folder, 'folder')} onDragEnd={onDragEnd}
     onClick={() => renaming ? null : toggle(folder)} onKeyDown={event => { if (renaming) { if (event.key === 'Enter') { event.preventDefault(); finishRename(); } if (event.key === 'Escape') setRenaming(false); return; } if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(folder); } }}
-    onDragEnter={event => { if (hasFileDrag(event) && canDropOn(folder)) onSetDropTarget(folder); }}
-    onDragOver={event => { if (hasFileDrag(event) && canDropOn(folder)) event.preventDefault(); }}
-    onDrop={event => { event.preventDefault(); event.stopPropagation(); const folderPath = event.dataTransfer.getData(FOLDER_MIME); const id = event.dataTransfer.getData(NOTE_MIME); if (folderPath && canDropOn(folder)) onMoveFolder(folderPath, folder); else if (id) onMove(id, folder); onDragEnd(); }}>
+    onDragEnter={event => { if (!hasFileDrag(event)) return; const folderPath = event.dataTransfer.getData(FOLDER_MIME) || draggedFolder; if (folderPath && folderPath !== folder && pathParent(folderPath) === pathParent(folder) && folderDropEdge(event)) onSetDropTarget(`folder:${folder}:${folderDropEdge(event)}`); else if (canDropOn(folder)) onSetDropTarget(folder); }}
+    onDragOver={event => { if (!hasFileDrag(event)) return; const folderPath = event.dataTransfer.getData(FOLDER_MIME) || draggedFolder; if (folderPath && folderPath !== folder && pathParent(folderPath) === pathParent(folder) && folderDropEdge(event)) { event.preventDefault(); onSetDropTarget(`folder:${folder}:${folderDropEdge(event)}`); } else if (canDropOn(folder)) { event.preventDefault(); onSetDropTarget(folder); } }}
+    onDrop={event => { event.preventDefault(); event.stopPropagation(); const folderPath = event.dataTransfer.getData(FOLDER_MIME) || draggedFolder; const id = event.dataTransfer.getData(NOTE_MIME); const edge = folderDropEdge(event); if (folderPath && folderPath !== folder && pathParent(folderPath) === pathParent(folder) && edge) onReorderFolder(folderPath, folder, edge === 'after'); else if (folderPath && canDropOn(folder)) onMoveFolder(folderPath, folder); else if (id) onMove(id, folder); onDragEnd(); }}>
     <button type="button" className="disclosure-button" aria-label={isCollapsed ? 'Ordner ausklappen' : 'Ordner einklappen'} tabIndex={-1} onClick={event => { event.stopPropagation(); toggle(folder); }}>{isCollapsed ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}</button>
     {isCollapsed ? <Folder size={15} className="tree-folder-icon"/> : <FolderOpen size={15} className="tree-folder-icon"/ >}
     {renaming ? <input autoFocus value={draft} onClick={event => event.stopPropagation()} onChange={event => setDraft(event.target.value)} onBlur={finishRename} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); finishRename(); } if (event.key === 'Escape') setRenaming(false); }} className="tree-rename-input" aria-label="Ordner umbenennen"/> : <span className="tree-label">{basename(folder)}</span>}
@@ -66,13 +69,13 @@ function NoteRow({ note, active, folders, onOpen, onRename, onDelete, onMove, on
   </ContextMenu.Root>;
 }
 
-export default function FileTree({ vault, activeId, collapsed, setCollapsed, onOpen, onRename, onDelete, onMove, onReorder, onExport, onCreateNote, onCreateFolder, onRenameFolder, onDeleteFolder, onImport, onExportVault, onDragStart, onMoveFolder }) {
+export default function FileTree({ vault, activeId, collapsed, setCollapsed, onOpen, onRename, onDelete, onMove, onReorder, onExport, onCreateNote, onCreateFolder, onRenameFolder, onDeleteFolder, onImport, onExportVault, onDragStart, onMoveFolder, onReorderFolder }) {
   const treeRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [dropTarget, setDropTarget] = useState('');
   const [draggedFolder, setDraggedFolder] = useState('');
   const [draggedNoteId, setDraggedNoteId] = useState('');
-  const folders = [...new Set(vault.folders || [])].sort((a, b) => a.localeCompare(b, 'de'));
+  const folders = [...new Set(vault.folders || [])];
   const notes = vault.notes;
   const folderChildren = parent => folders.filter(folder => pathParent(folder) === parent);
   const noteChildren = parent => { const siblings = notes.filter(note => pathParent(note.path) === parent); const alphabetical = [...siblings].sort((a, b) => a.title.localeCompare(b.title, 'de')); const fallback = new Map(alphabetical.map((note, index) => [note.id, index])); return alphabetical.sort((a, b) => (Number.isFinite(a.order) ? a.order : fallback.get(a.id)) - (Number.isFinite(b.order) ? b.order : fallback.get(b.id)) || a.title.localeCompare(b.title, 'de')); };
@@ -91,7 +94,7 @@ export default function FileTree({ vault, activeId, collapsed, setCollapsed, onO
       folderChildren(folder).forEach(child => contents.push(renderFolder(child, depth + 1)));
     }
     return <div className="tree-folder-group" key={folder}>
-      <FolderRow folder={folder} depth={depth} collapsed={collapsed} toggle={toggle} dropTarget={dropTarget} folders={folders} onMove={onMove} onMoveFolder={onMoveFolder} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateNote={onCreateNote} onCreateFolder={onCreateFolder} onDragStart={startFolderDrag} onDragEnd={finishDrag} canDropOn={canDropOn} onSetDropTarget={setDropTarget}/>
+      <FolderRow folder={folder} depth={depth} collapsed={collapsed} toggle={toggle} dropTarget={dropTarget} draggedFolder={draggedFolder} folders={folders} onMove={onMove} onMoveFolder={onMoveFolder} onReorderFolder={onReorderFolder} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateNote={onCreateNote} onCreateFolder={onCreateFolder} onDragStart={startFolderDrag} onDragEnd={finishDrag} canDropOn={canDropOn} onSetDropTarget={setDropTarget}/>
       {!isCollapsed && <div className="tree-children">{contents}</div>}
     </div>;
   }

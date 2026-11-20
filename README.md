@@ -34,7 +34,7 @@ npm run desktop:build:mac       # macOS .app und .dmg, auf macOS
 npm run desktop:build:windows   # Windows .msi und NSIS .exe, auf Windows
 ```
 
-Voraussetzung sind Rust/Cargo, Tauri CLI und die plattformspezifischen Build-Werkzeuge. Dieses Mac-System hat Xcode, aber kein Rust/Cargo und keine verwendbare Java-Runtime; ein Windows-Runner ist hier nicht verfügbar. Deshalb wurden keine Installer gebaut, installiert oder getestet. Die offiziellen Tauri-Anleitungen nennen `tauri build` für die Bundles und sehen macOS bzw. Windows als Build-Host für die jeweiligen Installer vor.
+Voraussetzung sind `npm install`, Rust/Cargo und die plattformspezifischen Build-Werkzeuge. Der Build erzeugt die macOS-/Windows-Icons aus `icon.svg`. Dieses Mac-System hat Xcode, aber kein Rust/Cargo und keine verwendbare Java-Runtime; ein Windows-Runner ist hier nicht verfügbar. Deshalb wurden keine Installer gebaut, installiert oder getestet. Tauri empfiehlt, die Plattformicons mit `tauri icon` zu erzeugen; die jeweiligen Installer werden auf macOS bzw. Windows gebaut.
 
 ## Import/Export
 

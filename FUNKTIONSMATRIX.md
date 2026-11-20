@@ -18,7 +18,8 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 | Titel automatisch speichern beim Verlassen | Implementiert: Blur, Wechsel aus Dokument und Öffnen einer anderen Notiz committen den Titel | Browser: Titel geändert, Graph geöffnet; Baumtitel aktualisierte sich und Editor schloss | Firebase-Roundtrip des Titels noch nicht live geprüft |
 | Umbenennen per Enter/Doppelklick | Implementiert | Browser: Enter öffnet Inline-Umbenennung; Doppelklick ist als zusätzlicher Trigger eingebaut | Rename-Kollision wird abgefangen; weitere Tastaturprüfung offen |
 | Profilmenü am Avatar | Profil (Vor-/Nachname editierbar), Einstellungen und Abmelden | Codeprüfung; Login-/Profil-UI manuell | Namen stammen aus Firebase Auth `displayName` (Google oder editierbares Profil); erfolgreicher Live-Speichervorgang nicht geprüft |
-| Markdown bearbeiten, Live-Vorschau, Lesemodus | React: Dokumentwechsel übernimmt den aktuellen Modus; Klick im Dokument bearbeitet, Fokus außerhalb zeigt Vorschau | Browser: Wechsel zwischen zwei Notizen im Lesemodus blieb Lesen; Wechsel im Bearbeitungsmodus blieb Bearbeiten | Kein CommonMark/GFM-Vollumfang; Tabellen, Callouts, Tasks und Plugins fehlen |
+| Markdown bearbeiten, Live-Vorschau, Lesemodus | React: Dokumentwechsel übernimmt den aktuellen Modus; Lesebereich scrollbar; Klick im Dokument bearbeitet | Browser: Wechsel zwischen zwei Notizen im Lesemodus blieb Lesen; lange Vorschau ließ sich scrollen | Kein CommonMark/GFM-Vollumfang; Tabellen, Callouts und Plugins fehlen |
+| Aufgabenlisten / Checkboxen | `- [ ]` und `- [x]` erscheinen im Lesemodus als Checkboxen; Anklicken ändert den Markdown-Status und speichert | Browser: zwei Tasks angezeigt; Checkbox umgeschaltet; Lesemodus blieb aktiv | Unterstützung für abweichende Task-Markierungen/Listen-Nesting nicht geprüft |
 | Tabs | Lokal prototypisch | Browserlauf: zwei offene Notiz-Tabs | Keine geteilten Ansichten, persistente Tab-Sitzung oder Tab-Gruppen |
 | Volltextsuche | Fertig, lokale Daten | Browserlauf: Suche nach „Testwissen“ lieferte Notiz | Kein Operator-/Query-Syntax, Ergebnisvorschau oder Suche über Cloud |
 | Befehlspalette | Lokal prototypisch | Browserprüfung | Nur Atelier-Befehle; kein Plugin-Command-Registry |
@@ -71,3 +72,5 @@ Moduswechsel am 20.11.2026: Zwei Notizen nacheinander aus dem Lesemodus geöffne
 Sidebar-Breite am 20.11.2026: Trennsteg im Browser gezogen; Dateibaum wuchs von 256 auf 356 px. Nach Neuladen blieb die neue Breite erhalten.
 
 Ordnerreihenfolge am 20.11.2026: `Notizen` an den oberen Rand von `Ideen` gezogen; die Geschwisterreihenfolge im Dateibaum wechselte sichtbar zu `Notizen`, `Ideen`.
+
+Lesebereich am 20.11.2026: Eine lange Testnotiz erzeugte einen scrollbaren Lesebereich (749 px Viewport, 4.548 px Inhalt); Scrollen auf 500 px geprüft. Offene und erledigte Tasks erschienen als Checkboxen; Umschalten aktualisierte die Markdown-Task-Zeile und ließ den Lesemodus aktiv.

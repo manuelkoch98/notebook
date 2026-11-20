@@ -15,13 +15,19 @@ function inline(text, onWiki) {
   });
 }
 
-export default function MarkdownPreview({ source, onWiki }) {
+export default function MarkdownPreview({ source, onWiki, onToggleTask }) {
   const blocks = [];
   let list = [];
   const flush = () => { if (list.length) { blocks.push(<ul key={`list-${blocks.length}`}>{list}</ul>); list = []; } };
   source.split('\n').forEach((line, index) => {
     const item = line.match(/^\s*[-*+]\s+(.+)/);
-    if (item) { list.push(<li key={index}>{inline(item[1], onWiki)}</li>); return; }
+    if (item) {
+      const task = item[1].match(/^\[([ xX])\]\s+(.*)$/);
+      list.push(task
+        ? <li key={index} className="task-list-item"><input type="checkbox" checked={task[1].trim().length > 0} aria-label={task[2]} onChange={() => onToggleTask?.(index)}/><span>{inline(task[2], onWiki)}</span></li>
+        : <li key={index}>{inline(item[1], onWiki)}</li>);
+      return;
+    }
     flush();
     if (!line.trim()) return;
     const heading = line.match(/^(#{1,3})\s+(.+)/);

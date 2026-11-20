@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Atelier — Wissenswerkstatt",
+        "title": "Atelier",
         "width": 1280,
         "height": 820,
         "minWidth": 760,

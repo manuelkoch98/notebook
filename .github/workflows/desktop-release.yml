@@ -41,7 +41,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
         with:
-          tagName: atelier-v__VERSION__
+          tagName: v__VERSION__
           releaseName: atelier v__VERSION__
           releaseBody: Installers für macOS (DMG) und Windows (NSIS EXE).
           releaseDraft: false

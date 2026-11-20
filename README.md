@@ -48,7 +48,7 @@ Der Workflow `.github/workflows/desktop-release.yml` baut auf macOS einen DMG-In
 
 Damit die installierte App mit Firebase startet, im Repository unter **Settings → Secrets and variables → Actions → Variables** die sechs `VITE_FIREBASE_*`-Variablen wie in `.env.example` anlegen. Es sind Client-Web-Konfigurationswerte (keine Admin-Schlüssel). Ohne diese Variablen erstellt der Workflow zwar Installer, aber die gebaute App hat keine aktivierte Firebase-Anmeldung.
 
-Ein Release kann nach dem Pushen des Workflows mit einem Versions-Tag gestartet werden, zum Beispiel `git tag v0.1.1 && git push origin v0.1.1`. Die App-Version in `src-tauri/tauri.conf.json` muss dafür ebenfalls auf die zu veröffentlichende Version gesetzt sein.
+Ein Release kann nach dem Pushen des Workflows mit einem Versions-Tag gestartet werden, zum Beispiel `git tag v0.1.1 && git push origin v0.1.1`. Die App-Version in `src-tauri/tauri.conf.json` muss dafür ebenfalls auf die zu veröffentlichende Version gesetzt sein. Für den ersten Desktop-Build ohne Versionsänderung kann `v0.1.0` verwendet werden; der Workflow erstellt dann die Release-Seite unter demselben Tag und lädt beide Installer hoch.
 
 ## Import/Export
 

@@ -9,6 +9,7 @@ import MarkdownPreview from './components/MarkdownPreview.jsx';
 import ProfileMenu from './components/ProfileMenu.jsx';
 import BrandMark from './components/BrandMark.jsx';
 import DialogFrame from './components/ui/DialogFrame.jsx';
+import ConfirmDialog from './components/ui/ConfirmDialog.jsx';
 
 const DB_KEY = 'atelier-db-v1';
 const freshVault = () => ({ id: 'main', name: 'Mein Wissensgarten', folders: ['Ideen', 'Notizen'], notes: [
@@ -68,6 +69,7 @@ function Workspace() {
   const [folderParent, setFolderParent] = useState('');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => Math.max(190, Math.min(480, Number(localStorage.getItem('atelier-sidebar-width')) || 256)));
   const [toast, setToast] = useState('');
@@ -301,13 +303,15 @@ function Workspace() {
     if (mode === 'edit') { commitTitle(); setMode('read'); }
     else setMode('edit');
   }
+  function requestConfirmation(options) { setConfirmation(options); }
   function deleteNote(id) {
     const note = vault.notes.find(item => item.id === id); if (!note) return;
-    if (!window.confirm(`„${note.title}“ löschen?`)) return;
-    updateVault(current => ({ ...current, notes: current.notes.filter(item => item.id !== id) }));
-    setTabs(current => current.filter(item => item !== id));
-    if (activeId === id) { setActiveId(null); setTitle(''); setBody(''); }
-    notify('Notiz gelöscht');
+    requestConfirmation({ title: 'Notiz löschen?', description: `„${note.title}“ wird dauerhaft gelöscht.`, confirmLabel: 'Notiz löschen', danger: true, onConfirm: () => {
+      updateVault(current => ({ ...current, notes: current.notes.filter(item => item.id !== id) }));
+      setTabs(current => current.filter(item => item !== id));
+      if (activeId === id) { setActiveId(null); setTitle(''); setBody(''); }
+      setConfirmation(null); notify('Notiz gelöscht');
+    } });
   }
   function moveNote(id, folder) {
     const target = vault.notes.find(note => note.id === id); if (!target) return;
@@ -383,12 +387,13 @@ function Workspace() {
   function deleteFolder(folder) {
     const childFolders = vault.folders.filter(item => item === folder || item.startsWith(`${folder}/`));
     const removedNotes = vault.notes.filter(note => note.path.startsWith(`${folder}/`));
-    if (!window.confirm(`„${folder}“ und ${removedNotes.length} Datei(en) sowie alle Unterordner löschen?`)) return;
-    const removedIds = new Set(removedNotes.map(note => note.id));
-    updateVault(current => ({ ...current, folders: current.folders.filter(item => !childFolders.includes(item)), notes: current.notes.filter(note => !removedIds.has(note.id)) }));
-    setTabs(current => current.filter(id => !removedIds.has(id)));
-    if (activeId && removedIds.has(activeId)) { setActiveId(null); setTitle(''); setBody(''); }
-    notify(`Ordner „${folder}“ gelöscht`);
+    requestConfirmation({ title: 'Ordner löschen?', description: `„${folder}“ mit ${removedNotes.length} Datei(en) und allen Unterordnern dauerhaft löschen?`, confirmLabel: 'Ordner löschen', danger: true, onConfirm: () => {
+      const removedIds = new Set(removedNotes.map(note => note.id));
+      updateVault(current => ({ ...current, folders: current.folders.filter(item => !childFolders.includes(item)), notes: current.notes.filter(note => !removedIds.has(note.id)) }));
+      setTabs(current => current.filter(id => !removedIds.has(id)));
+      if (activeId && removedIds.has(activeId)) { setActiveId(null); setTitle(''); setBody(''); }
+      setConfirmation(null); notify(`Ordner „${folder}“ gelöscht`);
+    } });
   }
   function addFolder() {
     const name = cleanTitle(field.trim()); if (!field.trim()) return;
@@ -412,7 +417,11 @@ function Workspace() {
     const target = db.vaults.find(item => item.id === id);
     if (!target) return;
     if (db.vaults.length <= 1) return notify('Lege zuerst einen weiteren Vault an, bevor du diesen löschst.');
-    if (!window.confirm(`Vault „${target.name}“ samt allen Notizen und Ordnern endgültig löschen?`)) return;
+    requestConfirmation({ title: 'Vault löschen?', description: `Vault „${target.name}“ samt allen Notizen und Ordnern endgültig löschen?`, confirmLabel: 'Vault endgültig löschen', danger: true, onConfirm: () => { setConfirmation(null); void performDeleteVault(id); } });
+  }
+  async function performDeleteVault(id) {
+    const target = db.vaults.find(item => item.id === id);
+    if (!target) return;
     if (auth.user) {
       if (!auth.db || !auth.firestoreSdk) return notify('Firebase ist noch nicht verbunden. Versuche es gleich noch einmal.');
       const fs = auth.firestoreSdk;
@@ -545,6 +554,7 @@ function Workspace() {
       <div className="search-dialog"><div className="search-field"><Search size={17}/><input autoFocus value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Notiz oder Inhalt suchen …" onKeyDown={event => { if (event.key === 'Enter' && results[0]) selectResult(results[0]); }}/></div><div className="search-results">{results.map(note => <button key={note.id} className="search-result" onClick={() => selectResult(note)}><FileText size={15}/><span><strong>{note.title}</strong><small>{note.path} · {note.body.slice(0, 100)}</small></span></button>)}{!results.length && <p className="empty-tree">Keine Treffer</p>}</div></div>
     </DialogFrame>
     <DialogFrame open={graphOpen} onOpenChange={setGraphOpen} title="Wissensgraph" description={`${vault.notes.length} Notizen in ${vault.name}`}><div className="graph-preview">{vault.notes.map(note => <button key={note.id} onClick={() => { openNote(note.id); setGraphOpen(false); }}>{note.title}</button>)}</div></DialogFrame>
+    <ConfirmDialog open={Boolean(confirmation)} onOpenChange={open => !open && setConfirmation(null)} title={confirmation?.title || ''} description={confirmation?.description || ''} confirmLabel={confirmation?.confirmLabel} danger={confirmation?.danger} onConfirm={confirmation?.onConfirm || (() => setConfirmation(null))}/>
     <input id="vault-import" className="sr-only" type="file" multiple onChange={pickFile}/>
     {toast && <div className="toast" role="status">{toast}</div>}
   </div>;

@@ -27,6 +27,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const isDesktopApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
   if (auth.loading) return <div className="page-loader"><span className="spinner"/> Verbindung zu atelier …</div>;
   if (auth.user) return <Navigate to="/" replace/>;
@@ -55,11 +56,11 @@ export default function LoginPage() {
       {auth.error && <p role="alert" className="form-notice">{auth.error}</p>}
       <p className="auth-footnote">Deine Notizen werden in deinem privaten Firebase-Konto gespeichert und für Offline-Arbeit zwischengespeichert.</p>
     </section>
-    <section className="desktop-downloads" aria-label="atelier Desktop herunterladen">
+    {!isDesktopApp && <section className="desktop-downloads" aria-label="atelier Desktop herunterladen">
       <p>atelier für deinen Desktop</p>
       <div><a className="button button-outline" href="https://github.com/manuelkoch98/notebook/releases/latest/download/atelier-darwin-aarch64.dmg"><Download size={15}/> macOS · DMG</a><a className="button button-outline" href="https://github.com/manuelkoch98/notebook/releases/latest/download/atelier-windows-x86_64-setup.exe"><Download size={15}/> Windows · EXE</a></div>
       <small>Direkter Download aus dem neuesten GitHub-Release. Das private Repository erfordert GitHub-Zugriff.</small>
-    </section>
+    </section>}
     <span className="auth-copyright">atelier · DEIN RUHIGER ORT FÜR GEDANKEN</span>
   </main>;
 }

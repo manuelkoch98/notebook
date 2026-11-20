@@ -4,6 +4,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { CircleUserRound, LogOut, Settings2, UserRound } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import DialogFrame from './ui/DialogFrame.jsx';
+import UserAvatar from './UserAvatar.jsx';
 
 function splitName(displayName = '') {
   const parts = displayName.trim().split(/\s+/).filter(Boolean);
@@ -72,9 +73,9 @@ export default function ProfileMenu() {
   }
 
   return <>
-    <DropdownMenu.Root><DropdownMenu.Trigger asChild><button className="profile-trigger" aria-label="Profil und Konto" title="Profil und Konto">{auth.user?.photoURL ? <img src={auth.user.photoURL} alt=""/> : initialLetter}</button></DropdownMenu.Trigger><DropdownMenu.Portal>
+    <DropdownMenu.Root><DropdownMenu.Trigger asChild><button className="profile-trigger" aria-label="Profil und Konto" title="Profil und Konto"><UserAvatar user={auth.user} fallback={initialLetter}/></button></DropdownMenu.Trigger><DropdownMenu.Portal>
       <DropdownMenu.Content className="dropdown-menu profile-dropdown" side="top" align="end" sideOffset={8}>
-        <div className="profile-menu-head"><span className="profile-small-avatar">{initialLetter}</span><div><strong>{displayName || auth.user?.email || 'Mein Profil'}</strong><span>{auth.user?.email || 'Lokaler Arbeitsbereich'}</span></div></div>
+        <div className="profile-menu-head"><UserAvatar user={auth.user} fallback={initialLetter} className="profile-small-avatar"/><div><strong>{displayName || auth.user?.email || 'Mein Profil'}</strong><span>{auth.user?.email || 'Lokaler Arbeitsbereich'}</span></div></div>
         <DropdownMenu.Separator className="menu-separator"/>
         <DropdownMenu.Item className="dropdown-item" onSelect={() => setDialog('profile')}><UserRound size={16}/> Profil</DropdownMenu.Item>
         <DropdownMenu.Item className="dropdown-item" onSelect={() => setDialog('settings')}><Settings2 size={16}/> Einstellungen</DropdownMenu.Item>
@@ -84,7 +85,7 @@ export default function ProfileMenu() {
     </DropdownMenu.Portal></DropdownMenu.Root>
     <DialogFrame open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')} title={dialog === 'profile' ? 'Profil' : 'Einstellungen'} description={dialog === 'profile' ? 'Dein Name wird im Arbeitsbereich angezeigt.' : 'Arbeitsbereich und Tastenkürzel.'}>
         {dialog === 'profile' ? <form className="profile-form" onSubmit={saveProfile}>
-          <div className="profile-avatar-preview">{initialLetter}</div>
+          <UserAvatar user={auth.user} fallback={initialLetter} className="profile-avatar-preview"/>
           <label>Vorname<input autoComplete="given-name" value={firstName} onChange={event => setFirstName(event.target.value)} placeholder="Vorname"/></label>
           <label>Nachname<input autoComplete="family-name" value={lastName} onChange={event => setLastName(event.target.value)} placeholder="Nachname"/></label>
           {auth.user && <p className="profile-email">{auth.user.email}</p>}

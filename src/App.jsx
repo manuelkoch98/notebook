@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Check, ChevronDown, Command, FilePlus2, FileText, Search, Share2, PanelLeft, X, Plus, Network, Pencil, Trash2, Download, CircleHelp } from 'lucide-react';
+import { Check, ChevronDown, Command, FilePlus2, FileText, Search, Share2, PanelLeft, Plus, Network, Pencil, Trash2, Download, CircleHelp } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider.jsx';
 import FileTree from './components/FileTree.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import MarkdownPreview from './components/MarkdownPreview.jsx';
 import ProfileMenu from './components/ProfileMenu.jsx';
+import BrandMark from './components/BrandMark.jsx';
+import DialogFrame from './components/ui/DialogFrame.jsx';
 
 const DB_KEY = 'atelier-db-v1';
 const freshVault = () => ({ id: 'main', name: 'Mein Wissensgarten', folders: ['Ideen', 'Notizen'], notes: [
@@ -45,12 +46,6 @@ function LoginRoute() {
   if (auth.loading) return <div className="page-loader"><span className="spinner"/> Verbindung zu atelier …</div>;
   if (auth.user) return <Navigate to="/" replace/>;
   return <LoginPage/>;
-}
-
-function DialogFrame({ open, onOpenChange, title, description, children }) {
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="dialog-overlay"/><Dialog.Content className="dialog-content">
-    <div className="dialog-titlebar"><div><Dialog.Title>{title}</Dialog.Title><Dialog.Description>{description}</Dialog.Description></div><Dialog.Close asChild><button className="icon-button" aria-label="Schließen"><X size={16}/></button></Dialog.Close></div>{children}
-  </Dialog.Content></Dialog.Portal></Dialog.Root>;
 }
 
 function Workspace() {
@@ -505,7 +500,7 @@ function Workspace() {
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` }} onPointerDown={event => { if (mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); if (!event.target.closest('.tree-note')) setMode('read'); } }}>
-    <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setActiveId(null); setTabs([]); }}><span>a</span><i>.</i></Link><button className="rail-button active" title="Dateien" onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className="rail-button" title="Graph" onClick={() => setGraphOpen(true)}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
+    <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setActiveId(null); setTabs([]); }}><BrandMark/></Link><button className="rail-button active" title="Dateien" onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className="rail-button" title="Graph" onClick={() => setGraphOpen(true)}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
     <aside className="sidebar">
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span>
         <DropdownMenu.Root><DropdownMenu.Trigger asChild><button type="button" className="workspace-select-button" aria-label="Vault auswählen"><span>{vault.name}</span><ChevronDown size={15}/></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="workspace-menu" align="start" sideOffset={6}>

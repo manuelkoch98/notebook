@@ -42,6 +42,14 @@ npm run desktop:build:windows   # Windows .msi und NSIS .exe, auf Windows
 
 Voraussetzung sind `npm install`, Rust/Cargo und die plattformspezifischen Build-Werkzeuge. Der Build erzeugt die macOS-/Windows-Icons aus `public/icon.svg`. Dieses Mac-System hat Xcode, aber kein Rust/Cargo und keine verwendbare Java-Runtime; ein Windows-Runner ist hier nicht verfügbar. Deshalb wurden keine Installer gebaut, installiert oder getestet. Tauri empfiehlt, die Plattformicons mit `tauri icon` zu erzeugen; die jeweiligen Installer werden auf macOS bzw. Windows gebaut.
 
+### Installer über GitHub Releases
+
+Der Workflow `.github/workflows/desktop-release.yml` baut auf macOS einen DMG-Installer und auf Windows einen NSIS-Setup-EXE-Installer, sobald ein `v*`-Tag gepusht wird. Er veröffentlicht beide Assets als GitHub Release. Die Login-Seite führt zur Release-Übersicht; solange noch kein Release gebaut wurde, stehen dort noch keine Downloads bereit. Weil dieses Repository privat ist, müssen Nutzer für den Installer Zugriff auf GitHub und das Repository haben.
+
+Damit die installierte App mit Firebase startet, im Repository unter **Settings → Secrets and variables → Actions → Variables** die sechs `VITE_FIREBASE_*`-Variablen wie in `.env.example` anlegen. Es sind Client-Web-Konfigurationswerte (keine Admin-Schlüssel). Ohne diese Variablen erstellt der Workflow zwar Installer, aber die gebaute App hat keine aktivierte Firebase-Anmeldung.
+
+Ein Release kann nach dem Pushen des Workflows mit einem Versions-Tag gestartet werden, zum Beispiel `git tag v0.1.1 && git push origin v0.1.1`. Die App-Version in `src-tauri/tauri.conf.json` muss dafür ebenfalls auf die zu veröffentlichende Version gesetzt sein.
+
 ## Import/Export
 
 Derzeit kann man mehrere Markdown-/Textdateien oder einen Ordner über den Import-Dialog einlesen. Export lädt Markdown-Notizen einzeln herunter. Vollständiger ZIP-Roundtrip inklusive Anhängen und originaler verschachtelter Struktur ist noch offen; die geplante Testmatrix steht in [FUNKTIONSMATRIX.md](FUNKTIONSMATRIX.md).

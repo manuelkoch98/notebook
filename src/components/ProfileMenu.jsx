@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import * as Dialog from '@radix-ui/react-dialog';
-import { CircleUserRound, LogOut, Settings2, UserRound, X } from 'lucide-react';
+import { CircleUserRound, LogOut, Settings2, UserRound } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider.jsx';
+import DialogFrame from './ui/DialogFrame.jsx';
 
 function splitName(displayName = '') {
   const parts = displayName.trim().split(/\s+/).filter(Boolean);
@@ -60,9 +60,7 @@ export default function ProfileMenu() {
         {auth.user ? <DropdownMenu.Item className="dropdown-item danger" onSelect={() => auth.signOut()}><LogOut size={16}/> Abmelden</DropdownMenu.Item> : <DropdownMenu.Item className="dropdown-item" onSelect={() => navigate('/login')}><CircleUserRound size={16}/> Anmelden</DropdownMenu.Item>}
       </DropdownMenu.Content>
     </DropdownMenu.Portal></DropdownMenu.Root>
-    <Dialog.Root open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')}>
-      <Dialog.Portal><Dialog.Overlay className="dialog-overlay"/><Dialog.Content className="dialog-content">
-        <div className="dialog-titlebar"><div><Dialog.Title>{dialog === 'profile' ? 'Profil' : 'Einstellungen'}</Dialog.Title><Dialog.Description>{dialog === 'profile' ? 'Dein Name wird im Arbeitsbereich angezeigt.' : 'Arbeitsbereich und Tastenkürzel.'}</Dialog.Description></div><Dialog.Close asChild><button className="icon-button" aria-label="Schließen"><X size={16}/></button></Dialog.Close></div>
+    <DialogFrame open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')} title={dialog === 'profile' ? 'Profil' : 'Einstellungen'} description={dialog === 'profile' ? 'Dein Name wird im Arbeitsbereich angezeigt.' : 'Arbeitsbereich und Tastenkürzel.'}>
         {dialog === 'profile' ? <form className="profile-form" onSubmit={saveProfile}>
           <div className="profile-avatar-preview">{initialLetter}</div>
           <label>Vorname<input autoComplete="given-name" value={firstName} onChange={event => setFirstName(event.target.value)} placeholder="Vorname"/></label>
@@ -71,7 +69,6 @@ export default function ProfileMenu() {
           {notice && <p className="profile-notice" role="status">{notice}</p>}
           <button className="button button-primary" disabled={saving}>{saving ? 'Speichert …' : 'Profil speichern'}</button>
         </form> : <div className="profile-details"><div className="settings-row"><span>Neue Notiz</span><kbd>⌘ / Ctrl + N</kbd></div><div className="settings-row"><span>Befehlspalette</span><kbd>⌘ / Ctrl + K</kbd></div><div className="settings-row"><span>Suche</span><kbd>⌘ / Ctrl + Shift + F</kbd></div></div>}
-      </Dialog.Content></Dialog.Portal>
-    </Dialog.Root>
+    </DialogFrame>
   </>;
 }

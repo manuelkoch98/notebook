@@ -44,11 +44,11 @@ Voraussetzung sind `npm install`, Rust/Cargo und die plattformspezifischen Build
 
 ### Installer über GitHub Releases
 
-Der Workflow `.github/workflows/desktop-release.yml` baut auf macOS einen DMG-Installer und auf Windows einen NSIS-Setup-EXE-Installer, sobald ein `v*`-Tag gepusht wird. Er veröffentlicht beide Assets als GitHub Release. Die Login-Seite führt zur Release-Übersicht; solange noch kein Release gebaut wurde, stehen dort noch keine Downloads bereit. Weil dieses Repository privat ist, müssen Nutzer für den Installer Zugriff auf GitHub und das Repository haben.
+Der Workflow `.github/workflows/desktop-release.yml` baut auf macOS einen DMG-Installer und auf Windows einen NSIS-Setup-EXE-Installer, sobald ein GitHub Release veröffentlicht wird. Er hängt beide Assets an dieses Release. Der Workflow kann außerdem unter **Actions** manuell gestartet werden. Die Login-Seite führt zur Release-Übersicht; solange noch kein Build fertig ist, stehen dort nur die automatisch angelegten Quellarchive. Weil dieses Repository privat ist, müssen Nutzer für den Installer Zugriff auf GitHub und das Repository haben.
 
 Damit die installierte App mit Firebase startet, im Repository unter **Settings → Secrets and variables → Actions → Variables** die sechs `VITE_FIREBASE_*`-Variablen wie in `.env.example` anlegen. Es sind Client-Web-Konfigurationswerte (keine Admin-Schlüssel). Ohne diese Variablen erstellt der Workflow zwar Installer, aber die gebaute App hat keine aktivierte Firebase-Anmeldung.
 
-Ein Release kann nach dem Pushen des Workflows mit einem Versions-Tag gestartet werden, zum Beispiel `git tag v0.1.1 && git push origin v0.1.1`. Die App-Version in `src-tauri/tauri.conf.json` muss dafür ebenfalls auf die zu veröffentlichende Version gesetzt sein. Für den ersten Desktop-Build ohne Versionsänderung kann `v0.1.0` verwendet werden; der Workflow erstellt dann die Release-Seite unter demselben Tag und lädt beide Installer hoch.
+Für den bereits veröffentlichten Tag `v0.1.0` kann unter **Actions → Build desktop installers → Run workflow** der Build manuell gestartet werden; die App-Version in `src-tauri/tauri.conf.json` ist bereits `0.1.0`. Künftige Veröffentlichungen starten automatisch nach dem Veröffentlichen eines GitHub Releases mit dem dazu passenden Versions-Tag.
 
 ## Import/Export
 

@@ -42,7 +42,7 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 | Canvas | Offen | Matrix | Obsidian-Canvas-JSON-Import/Export nicht implementiert |
 | Bases | Offen | Matrix | `.base`-Format, Views und Formeln nicht implementiert |
 | Themes, Plugins, Snippets | Offen | separat zu prüfen | Community-Plugin-APIs sind derzeit nicht kompatibel; keine Sandbox-/API-Schicht |
-| Firebase Authentication | Google + E-Mail/Passwort eingebunden | Browser: SDK lädt; unangemeldeter Aufruf `/` wird auf `/login` geleitet | Firebase Console muss beide Anbieter und produktive Domain freischalten; erfolgreiche Testanmeldung noch offen |
+| Firebase Authentication | Google + E-Mail/Passwort; Verknüpfen weiterer Anmeldemethoden im Profil ergänzt | Code-/Buildprüfung; Anmeldung und Provider-Link mit echtem Firebase-Konto noch nicht manuell verifiziert | Beide Methoden müssen auf derselben Firebase-UID verknüpft sein; getrennte vorhandene UID-Konten werden nicht automatisch zusammengeführt |
 | Firestore-Synchronisierung | Implementiert: Vault-/Notiz-Listener, Cloud-Schreibvorgänge, nutzerbezogener Cache und Konfliktnotizen | Code-/Buildprüfung; Firebase Emulator und echtes Zweitgerät noch nicht verfügbar/verifiziert | Live-Regeln, echte Offline-Warteschlange und Zwei-Geräte-Race müssen empirisch abgenommen werden |
 | Cloud Storage | Offen | Emulator erforderlich | Dateiupload/-download und Regeln vorbereitet, Client fehlt |
 | Nutzer-/Vault-Sicherheitsregeln | Regeln + Emulator-Test vorbereitet | `npm run test:rules` gestartet, Emulatorstart scheiterte | Java-Binärdatei ist auf diesem Mac nur ein JRE-Hinweis ohne Runtime; außerdem blockiert DNS den Firebase-CLI-Remote-Aufruf. Firestore/Storage-Regeln noch nicht empirisch bestätigt |

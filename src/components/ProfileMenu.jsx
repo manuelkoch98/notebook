@@ -22,6 +22,8 @@ export default function ProfileMenu() {
   const [lastName, setLastName] = useState(savedProfile.lastName || initial.last);
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [linkPassword, setLinkPassword] = useState('');
+  const [linkedProviders, setLinkedProviders] = useState([]);
   const displayName = [firstName, lastName].filter(Boolean).join(' ');
   const initialLetter = (displayName || auth.user?.email || 'M').trim().charAt(0).toUpperCase();
 
@@ -30,8 +32,28 @@ export default function ProfileMenu() {
     const parsed = splitName(auth.user?.displayName || localStorage.getItem(nameStorageKey) || '');
     setFirstName(savedProfile.firstName || parsed.first);
     setLastName(savedProfile.lastName || parsed.last);
+    setLinkedProviders(auth.user?.providerData?.map(provider => provider.providerId) || []);
+    setLinkPassword('');
     setNotice('');
   }, [dialog]);
+
+  async function linkProvider(action, successMessage) {
+    setSaving(true); setNotice('');
+    try {
+      const result = await action();
+      setLinkedProviders(result.user.providerData.map(provider => provider.providerId));
+      setLinkPassword(''); setNotice(successMessage);
+    } catch (error) {
+      const messages = {
+        'auth/credential-already-in-use': 'Diese Anmeldemethode gehört bereits zu einem anderen Firebase-Konto. Konten und Notizen werden nicht automatisch zusammengeführt.',
+        'auth/email-already-in-use': 'Diese E-Mail-Adresse ist bereits mit einem anderen Firebase-Konto verbunden.',
+        'auth/provider-already-linked': 'Diese Anmeldemethode ist bereits verknüpft.',
+        'auth/weak-password': 'Das Passwort muss mindestens sechs Zeichen haben.',
+        'auth/popup-closed-by-user': 'Das Google-Fenster wurde geschlossen.'
+      };
+      setNotice(messages[error?.code] || 'Anmeldemethode konnte nicht verknüpft werden. Bitte melde dich erneut an und versuche es noch einmal.');
+    } finally { setSaving(false); }
+  }
 
   async function saveProfile(event) {
     event.preventDefault();
@@ -66,6 +88,10 @@ export default function ProfileMenu() {
           <label>Vorname<input autoComplete="given-name" value={firstName} onChange={event => setFirstName(event.target.value)} placeholder="Vorname"/></label>
           <label>Nachname<input autoComplete="family-name" value={lastName} onChange={event => setLastName(event.target.value)} placeholder="Nachname"/></label>
           {auth.user && <p className="profile-email">{auth.user.email}</p>}
+          {auth.user && <section className="auth-methods"><strong>Anmeldemethoden</strong>
+            {linkedProviders.includes('google.com') ? <p className="profile-email">Google ist verknüpft.</p> : <button type="button" className="button button-outline" disabled={saving} onClick={() => linkProvider(auth.linkGoogle, 'Google wurde mit diesem Konto verknüpft.')}>Google mit diesem Konto verknüpfen</button>}
+            {linkedProviders.includes('password') ? <p className="profile-email">E-Mail und Passwort sind verknüpft.</p> : <div className="auth-link-password"><label htmlFor="link-password">Passwort hinzufügen</label><input id="link-password" type="password" autoComplete="new-password" minLength={6} value={linkPassword} onChange={event => setLinkPassword(event.target.value)} placeholder="Mindestens 6 Zeichen"/><button type="button" className="button button-outline" disabled={saving || linkPassword.length < 6} onClick={() => linkProvider(() => auth.linkEmailPassword(linkPassword), 'E-Mail und Passwort wurden mit diesem Konto verknüpft.')}>E-Mail und Passwort verknüpfen</button></div>}
+          </section>}
           {notice && <p className="profile-notice" role="status">{notice}</p>}
           <button className="button button-primary" disabled={saving}>{saving ? 'Speichert …' : 'Profil speichern'}</button>
         </form> : <div className="profile-details"><div className="settings-row"><span>Neue Notiz</span><kbd>⌘ / Ctrl + N</kbd></div><div className="settings-row"><span>Befehlspalette</span><kbd>⌘ / Ctrl + K</kbd></div><div className="settings-row"><span>Suche</span><kbd>⌘ / Ctrl + Shift + F</kbd></div></div>}

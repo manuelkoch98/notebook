@@ -14,7 +14,8 @@ function errorText(error) {
     'auth/popup-blocked': 'Der Browser hat das Pop-up blockiert.',
     'auth/invalid-credential': 'E-Mail-Adresse oder Passwort stimmt nicht.',
     'auth/email-already-in-use': 'Dieses Konto gibt es bereits. Melde dich stattdessen an.',
-    'auth/weak-password': 'Das Passwort muss mindestens sechs Zeichen haben.'
+    'auth/weak-password': 'Das Passwort muss mindestens sechs Zeichen haben.',
+    'auth/account-exists-with-different-credential': 'Für diese E-Mail gibt es bereits ein Konto mit einer anderen Anmeldemethode. Melde dich zuerst mit dieser Methode an und verknüpfe Google anschließend im Profil.'
   };
   return errors[error?.code] || 'Anmeldung fehlgeschlagen. Bitte prüfe deine Angaben und versuche es erneut.';
 }

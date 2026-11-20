@@ -31,6 +31,8 @@ export function AuthProvider({ children }) {
     signInGoogle: () => authState.sdk.signInWithPopup(authState.auth, new authState.sdk.GoogleAuthProvider()),
     signInEmail: (email, password) => authState.sdk.signInWithEmailAndPassword(authState.auth, email, password),
     createAccount: (email, password) => authState.sdk.createUserWithEmailAndPassword(authState.auth, email, password),
+    linkGoogle: () => authState.sdk.linkWithPopup(authState.auth.currentUser, new authState.sdk.GoogleAuthProvider()),
+    linkEmailPassword: password => authState.sdk.linkWithCredential(authState.auth.currentUser, authState.sdk.EmailAuthProvider.credential(authState.auth.currentUser.email, password)),
     resetPassword: email => authState.sdk.sendPasswordResetEmail(authState.auth, email),
     signOut: () => authState.sdk.signOut(authState.auth),
     updateProfile: (displayName) => authState.sdk.updateProfile(authState.auth.currentUser, { displayName })

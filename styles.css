@@ -37,9 +37,9 @@
 .login-card .welcome-kicker{font-size:10px}
 .login-card h1{margin:11px 0 7px;font:500 31px 'Playfair Display',Georgia,serif;color:#30382f;letter-spacing:-.4px}
 .login-intro{margin:0 0 23px;color:#747a71;font-size:15px}
-.google-button{width:100%;height:44px;border:1px solid #deddd7;border-radius:7px;background:#fffefa;color:#3f443e;font:500 14px 'DM Sans',sans-serif;cursor:pointer}
+.google-button{width:100%;height:44px;border:1px solid #deddd7;border-radius:7px;background:#fffefa;color:#3f443e;font:500 14px 'DM Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px}
 .google-button:hover{border-color:#bfc9bd;background:#fff}
-.google-g{display:inline-grid;place-items:center;width:20px;height:20px;margin-right:8px;border:1px solid #e8e6e0;border-radius:50%;color:#4285f4;font:bold 14px Arial,sans-serif}
+.google-logo{display:block;width:20px;height:20px;flex:none}
 .login-divider{display:flex;align-items:center;gap:12px;margin:19px 0;color:#989b94;font-size:12px}
 .login-divider:before,.login-divider:after{content:'';height:1px;background:#e8e6df;flex:1}
 .login-form{display:grid;gap:8px}

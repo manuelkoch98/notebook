@@ -18,13 +18,13 @@ Das Client-Konfigurationsmuster liegt in `.env.example`; daraus eine lokale `.en
 
 Firestore-/Storage-Regeln liegen in `firebase/`. Sie sperren den Zugriff auf `users/{uid}/vaults/{vaultId}` für angemeldete Nutzer auf genau die eigene UID. Die Emulator-Konfiguration liegt in `firebase.json`; `npm run test:rules` erstellt zwei kurzlebige Konten und prüft, dass das zweite Konto den fremden Vault nicht lesen oder ändern kann. Dafür werden Node.js und ein verwendbares Java JDK benötigt; Firebase dokumentiert JDK 11+ und weist auf Java 21 für kommende Firestore-Emulator-Versionen hin.
 
-Die Web-Anmeldung nutzt Firebase Authentication mit Google und E-Mail/Passwort. Die vom Nutzer bereitgestellte Web-Konfiguration liegt lokal in `.env.local` (wird ignoriert und nicht committet). `npm run build` schreibt daraus `dist/firebase-config.js`; Vercel muss dieselben `VITE_FIREBASE_*`-Werte und `VITE_CLOUD_ENABLED=true` als Build-Variablen erhalten. In der Firebase Console müssen Google und E-Mail/Passwort als Anmeldeanbieter aktiviert sein; die Vercel-Domain muss unter Authentication → Settings → Authorized domains stehen. **Anmeldung ist eingebunden, Notizen synchronisieren aber noch nicht nach Firestore; sie bleiben vorerst lokal.**
+Die Web-Anmeldung nutzt Firebase Authentication mit Google und E-Mail/Passwort. Die vom Nutzer bereitgestellte Web-Konfiguration liegt lokal in `.env.local` (wird ignoriert und nicht committet). `npm run build` schreibt daraus `dist/firebase-config.js`; Vercel muss dieselben `VITE_FIREBASE_*`-Werte und `VITE_CLOUD_ENABLED=true` als Build-Variablen erhalten. In der Firebase Console müssen Google und E-Mail/Passwort als Anmeldeanbieter aktiviert sein; die Vercel-Domain muss unter Authentication → Settings → Authorized domains stehen. **Die Anmeldung ist eingebunden. Firestore-Synchronisierung und Cloud-Anhänge sind noch nicht implementiert; Notizen bleiben vorerst lokal.**
 
 Geplantes Datenmodell: `users/{uid}/vaults/{vaultId}` (Metadaten), darunter `notes/{noteId}` mit Markdown-Text, Pfad, Revision und Änderungszeit; Anhänge unter `users/{uid}/vaults/{vaultId}/attachments/{attachmentId}`. Konfliktstrategie: bei konkurrierender Basisrevision beide Fassungen als wiederherstellbare Konfliktnotiz speichern, nie still überschreiben.
 
 ## Vercel
 
-Vercel → Add New → Project → privates GitHub-Repository importieren. Framework „Other“, Build Command `npm run build`, Output Directory `dist`. `vercel.json` setzt PWA-Header. Für Firebase-Clientintegration anschließend die `VITE_FIREBASE_*`-Werte als Production/Preview/Development Environment Variables setzen und den Cloud-Flag erst nach implementierter Authentifizierung aktivieren. Derzeit gibt es noch keine produktive Firebase-Integration.
+Vercel → Add New → Project → privates GitHub-Repository importieren. Framework „Other“, Build Command `npm run build`, Output Directory `dist`. `vercel.json` setzt PWA-Header. Die `VITE_FIREBASE_*`-Werte als Production/Preview/Development Environment Variables und `VITE_CLOUD_ENABLED=true` setzen. Nutzerverwaltung ist vorbereitet; die Web-App ist noch nicht für echte Notiz-Cloud-Synchronisierung bereit.
 
 ## Desktop
 

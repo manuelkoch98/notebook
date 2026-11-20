@@ -3,5 +3,5 @@
 fn main() {
     tauri::Builder::default()
         .run(tauri::generate_context!())
-        .expect("Atelier could not start");
+        .expect("atelier could not start");
 }

@@ -10,8 +10,8 @@ import ProfileMenu from './components/ProfileMenu.jsx';
 
 const DB_KEY = 'atelier-db-v1';
 const freshVault = () => ({ id: 'main', name: 'Mein Wissensgarten', folders: ['Ideen', 'Notizen'], notes: [
-  { id: 'welcome-note', title: 'Willkommen in Atelier', path: 'Willkommen in Atelier.md', body: '## Ein guter Ort für deine Gedanken\n\nAtelier ist deine persönliche Markdown-Wissenswerkstatt. Verbinde Notizen mit **[[Wikilinks]]** und finde Gedanken später mit der Suche wieder.\n\n### Dein erster Schritt\n\n- Schreib eine Notiz\n- Verknüpfe sie mit `[[einer anderen Notiz]]`\n- Nutze #ideen für ein Tag\n', created: Date.now(), updated: Date.now() },
-  { id: 'wikilinks', title: 'Wikilinks', path: 'Ideen/Wikilinks.md', body: '## Gedanken verbinden\n\nEin Link wie [[Willkommen in Atelier]] verbindet diese Notiz mit deiner Startseite.\n\n#verbindungen', created: Date.now(), updated: Date.now() }
+  { id: 'welcome-note', title: 'Willkommen in atelier', path: 'Willkommen in atelier.md', body: '## Ein guter Ort für deine Gedanken\n\natelier ist deine persönliche Markdown-Wissenswerkstatt. Verbinde Notizen mit **[[Wikilinks]]** und finde Gedanken später mit der Suche wieder.\n\n### Dein erster Schritt\n\n- Schreib eine Notiz\n- Verknüpfe sie mit `[[einer anderen Notiz]]`\n- Nutze #ideen für ein Tag\n', created: Date.now(), updated: Date.now() },
+  { id: 'wikilinks', title: 'Wikilinks', path: 'Ideen/Wikilinks.md', body: '## Gedanken verbinden\n\nEin Link wie [[Willkommen in atelier]] verbindet diese Notiz mit deiner Startseite.\n\n#verbindungen', created: Date.now(), updated: Date.now() }
 ] });
 function initialDB(key = DB_KEY) {
   try { const value = JSON.parse(localStorage.getItem(key)); if (value?.vaults?.length) return value; }
@@ -33,7 +33,7 @@ const nextNoteOrder = notes => sortNotes(notes).length;
 function AuthGate({ children }) {
   const auth = useAuth();
   const location = useLocation();
-  if (auth.loading) return <div className="page-loader"><span className="spinner"/> Atelier wird geöffnet …</div>;
+  if (auth.loading) return <div className="page-loader"><span className="spinner"/> atelier wird geöffnet …</div>;
   if (auth.error) return <div className="page-loader error-page">{auth.error}<Link to="/login">Anmeldung öffnen</Link></div>;
   if (auth.enabled && !auth.user) return <Navigate to="/login" replace state={{ from: location.pathname }}/>;
   return children;
@@ -41,7 +41,7 @@ function AuthGate({ children }) {
 
 function LoginRoute() {
   const auth = useAuth();
-  if (auth.loading) return <div className="page-loader"><span className="spinner"/> Verbindung zu Atelier …</div>;
+  if (auth.loading) return <div className="page-loader"><span className="spinner"/> Verbindung zu atelier …</div>;
   if (auth.user) return <Navigate to="/" replace/>;
   return <LoginPage/>;
 }
@@ -466,7 +466,7 @@ function Workspace() {
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` }} onPointerDown={event => { if (mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); if (!event.target.closest('.tree-note')) setMode('read'); } }}>
-    <aside className="rail"><Link to="/" className="brand-mark" aria-label="Atelier Startseite" onClick={() => { setActiveId(null); setTabs([]); }}><span>a</span><i>.</i></Link><button className="rail-button active" title="Dateien" onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className="rail-button" title="Graph" onClick={() => setGraphOpen(true)}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
+    <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setActiveId(null); setTabs([]); }}><span>a</span><i>.</i></Link><button className="rail-button active" title="Dateien" onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className="rail-button" title="Graph" onClick={() => setGraphOpen(true)}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
     <aside className="sidebar">
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span><select className="workspace-select" value={vault.id} aria-label="Vault auswählen" onChange={event => { if (event.target.value === '__new__') { setField(''); setDialog('vault'); } else { setVaultId(event.target.value); setActiveId(null); setTabs([]); } }}>
         {db.vaults.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="__new__">＋ Neuer Vault</option>
@@ -493,7 +493,7 @@ function Workspace() {
         </section>
         <aside className="right-sidebar"><div className="right-head"><span>NOTIZ-DETAILS</span><CircleHelp size={15}/></div>{activeNote ? <><div className="detail-section"><span>BACKLINKS</span>{backlinks.length ? backlinks.map(note => <button key={note.id} className="detail-link" onClick={() => openNote(note.id)}>{note.title}</button>) : <p>Noch keine Rückverweise</p>}</div><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activeNote.path}</p></div><div className="detail-section"><span>WORTANZAHL</span><p>{wordCount} Wörter</p></div></> : <div className="right-empty"><div className="detail-orbit">✳</div><strong>Alles an seinem Platz</strong><p>Öffne eine Notiz, um ihre Details und Verbindungen zu sehen.</p></div>}</aside>
       </div>
-      <footer className="statusbar"><span><i className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/> {auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span><span>{activeNote ? `${activeNote.title} · ${auth.user && cloudReady ? 'Cloud' : 'lokal'}` : 'Willkommen in Atelier'}</span><span>Markdown · UTF-8</span></footer>
+      <footer className="statusbar"><span><i className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/> {auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span><span>{activeNote ? `${activeNote.title} · ${auth.user && cloudReady ? 'Cloud' : 'lokal'}` : 'Willkommen in atelier'}</span><span>Markdown · UTF-8</span></footer>
     </main>
 
     <DialogFrame open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')} title={dialog === 'folder' ? 'Neuer Ordner' : dialog === 'vault' ? 'Neuer Vault' : 'Markdown-Vault importieren'} description={dialog === 'import' ? 'Wähle einen Ordner oder mehrere Markdown-Dateien aus.' : 'Gib einen Namen ein, um fortzufahren.'}>

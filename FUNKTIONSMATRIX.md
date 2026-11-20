@@ -1,4 +1,4 @@
-# Funktionsmatrix — Atelier
+# Funktionsmatrix — atelier
 
 Arbeitsliste nach den öffentlich dokumentierten Kernfunktionen von Obsidian. Status bezieht sich auf den Code in diesem Repository; „UI geprüft“ bedeutet eine sichtbare Prüfung der installierten Obsidian-App, „Automatisiert“ eine lokale Browser- oder Emulatorprüfung. Offene Lücken bleiben Teil der Umsetzung.
 
@@ -6,8 +6,8 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 
 | Bereich / Funktion | Stand | Prüfmethode | Offene Kompatibilitätslücken |
 |---|---|---|---|
-| Eigenständiges Branding und Gestaltung | App, Login, SVG-Favicon, PWA- und Desktop-Icons verwenden dieselbe Atelier-Marke | SVG/PNG visuell verglichen; `npm run desktop:icons` erzeugte macOS- und Windows-Icon-Dateien | Betriebssystem-Icons nicht auf installierten Desktop-Builds geprüft |
-| Separate Login-Seite und Auth-Route | React-Route `/login`; Login-Logo verwendet dieselbe Atelier-Marke wie die Startseite | Browser: `/` ohne Sitzung leitet zu `/login`; Login-Ansicht und Markenfarben/Logoabmessungen geprüft | Erfolgreiche Kontoanmeldung und Rückleitung mit echtem Firebase-Konto noch nicht geprüft |
+| Eigenständiges Branding und Gestaltung | App, Login, SVG-Favicon, PWA- und Desktop-Icons verwenden dieselbe atelier-Marke | SVG/PNG visuell verglichen; `npm run desktop:icons` erzeugte macOS- und Windows-Icon-Dateien | Betriebssystem-Icons nicht auf installierten Desktop-Builds geprüft |
+| Separate Login-Seite und Auth-Route | React-Route `/login`; Login-Logo verwendet dieselbe atelier-Marke wie die Startseite | Browser: `/` ohne Sitzung leitet zu `/login`; Login-Ansicht und Markenfarben/Logoabmessungen geprüft | Erfolgreiche Kontoanmeldung und Rückleitung mit echtem Firebase-Konto noch nicht geprüft |
 | UI-Komponenten | React + Radix UI, shadcn-inspiriertes Designsystem | Browser: Login, Datei-Menü, Profil-Menü und Arbeitsbereich gerendert | Keine shadcn CLI-generierten Komponenten; eigener CSS-/Token-Layer auf Radix |
 | Seitenleistenbreite | Ziehbarer Trenner zwischen Dateibaum und Arbeitsfläche; Breite lokal gespeichert; Tastatursteuerung mit Pfeiltasten | Browser: 256 → 356 px gezogen, nach Neuladen 356 px wiederhergestellt | Auf schmalen Mobilansichten ausgeblendet; dort bleibt die Sidebar als Overlay |
 | Vaults wechseln und anlegen | Lokal prototypisch | UI manuell | Noch kein Nutzerkonto-/Cloud-Vault; kein Löschen/Umbenennen |
@@ -22,7 +22,7 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 | Aufgabenlisten / Checkboxen | `- [ ]` und `- [x]` erscheinen im Lesemodus als Checkboxen; Anklicken ändert den Markdown-Status und speichert | Browser: zwei Tasks angezeigt; Checkbox umgeschaltet; Lesemodus blieb aktiv | Unterstützung für abweichende Task-Markierungen/Listen-Nesting nicht geprüft |
 | Tabs | Lokal prototypisch | Browserlauf: zwei offene Notiz-Tabs | Keine geteilten Ansichten, persistente Tab-Sitzung oder Tab-Gruppen |
 | Volltextsuche | Fertig, lokale Daten | Browserlauf: Suche nach „Testwissen“ lieferte Notiz | Kein Operator-/Query-Syntax, Ergebnisvorschau oder Suche über Cloud |
-| Befehlspalette | Lokal prototypisch | Browserprüfung | Nur Atelier-Befehle; kein Plugin-Command-Registry |
+| Befehlspalette | Lokal prototypisch | Browserprüfung | Nur atelier-Befehle; kein Plugin-Command-Registry |
 | Tastenkürzel frei belegen | Implementiert | Codepfad; Browserlauf folgt | Bindings konfigurierbar und gespeichert; Plattform-/Kollisionstests offen |
 | Wikilinks | Teilweise | Browserlauf: `[[Wikilinks]]` öffnete Zielnotiz | Nur `[[Titel]]`, Alias-/Heading-/Blockauflösung nicht umgesetzt |
 | Import einzelner Markdown-Dateien / Ordner | Teilweise | Datei-Input manuell | Kein ZIP; Anhänge und deren relative Pfade fehlen; Konflikte werden überschrieben |

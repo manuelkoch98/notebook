@@ -1,6 +1,6 @@
 {
-  "name": "Atelier",
-  "short_name": "Atelier",
+  "name": "atelier",
+  "short_name": "atelier",
   "description": "Deine persönliche Markdown-Wissenswerkstatt",
   "start_url": "/",
   "scope": "/",

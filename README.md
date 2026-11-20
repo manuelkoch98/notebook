@@ -1,4 +1,4 @@
-# Atelier
+# atelier
 
 Eine eigenständig gestaltete, browserbasierte Notiz-App. Nach Anmeldung ist Firestore der primäre Speicher für Vaults und Markdown-Notizen. Firebase Offline-Persistenz und ein nutzerbezogener Browser-Cache unterstützen Offline-Arbeit. Die Cloud-Verbindung ist implementiert, wurde aber noch nicht mit einem echten Konto oder im Emulator Ende-zu-Ende abgenommen.
 

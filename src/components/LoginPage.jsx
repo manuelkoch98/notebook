@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
-  if (auth.loading) return <div className="page-loader"><span className="spinner"/> Verbindung zu Atelier …</div>;
+  if (auth.loading) return <div className="page-loader"><span className="spinner"/> Verbindung zu atelier …</div>;
   if (auth.user) return <Navigate to="/" replace/>;
 
   async function run(action) {
@@ -36,9 +36,9 @@ export default function LoginPage() {
   }
 
   return <main className="auth-page">
-    <Link to="/login" className="auth-wordmark"><span className="brand-mark auth-brand-mark"><span>a</span><i>.</i></span><span>Atelier</span></Link>
+    <Link to="/login" className="auth-wordmark"><span className="brand-mark auth-brand-mark"><span>a</span><i>.</i></span><span>atelier</span></Link>
     <section className="auth-card">
-      <div className="auth-heading"><p className="eyebrow">DEIN PERSÖNLICHER WISSENSGARTEN</p><h1>{create ? 'Konto erstellen' : 'Willkommen zurück'}</h1><p>{create ? 'Richte deinen Zugang zu Atelier ein.' : 'Melde dich an, um deinen Wissensgarten zu öffnen.'}</p></div>
+      <div className="auth-heading"><p className="eyebrow">DEIN PERSÖNLICHER WISSENSGARTEN</p><h1>{create ? 'Konto erstellen' : 'Willkommen zurück'}</h1><p>{create ? 'Richte deinen Zugang zu atelier ein.' : 'Melde dich an, um deinen Wissensgarten zu öffnen.'}</p></div>
       <button className="button button-outline google-button" disabled={busy || !auth.sdk} onClick={() => run(auth.signInGoogle)}>{googleIcon}<span>Mit Google fortfahren</span></button>
       <div className="auth-divider"><span>oder mit E-Mail</span></div>
       <form className="auth-form" onSubmit={event => { event.preventDefault(); run(() => create ? auth.createAccount(email, password) : auth.signInEmail(email, password)); }}>
@@ -52,6 +52,6 @@ export default function LoginPage() {
       {auth.error && <p role="alert" className="form-notice">{auth.error}</p>}
       <p className="auth-footnote">Deine Notizen werden in deinem privaten Firebase-Konto gespeichert und für Offline-Arbeit zwischengespeichert.</p>
     </section>
-    <span className="auth-copyright">ATELIER · DEIN RUHIGER ORT FÜR GEDANKEN</span>
+    <span className="auth-copyright">atelier · DEIN RUHIGER ORT FÜR GEDANKEN</span>
   </main>;
 }

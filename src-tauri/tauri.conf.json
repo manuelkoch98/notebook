@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Atelier",
+  "productName": "atelier",
   "version": "0.1.0",
   "identifier": "com.manuelkoch98.atelier",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Atelier",
+        "title": "atelier",
         "width": 1280,
         "height": 820,
         "minWidth": 760,
@@ -27,6 +27,6 @@
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "category": "Productivity",
     "shortDescription": "Persönliche Markdown-Wissenswerkstatt",
-    "longDescription": "Atelier ist ein persönlicher Markdown-Arbeitsbereich zum Schreiben und Verbinden von Notizen."
+    "longDescription": "atelier ist ein persönlicher Markdown-Arbeitsbereich zum Schreiben und Verbinden von Notizen."
   }
 }

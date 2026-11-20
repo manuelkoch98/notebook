@@ -18,9 +18,9 @@ function initialDB(key = DB_KEY) {
   catch {}
   return { vaults: [freshVault()] };
 }
-function uniqueNoteTitle(vault) {
+function uniqueNoteTitle(vault, folder = '') {
   let title = 'Neue Notiz'; let counter = 2;
-  while (vault.notes.some(note => note.path.toLowerCase() === `${title}.md`.toLowerCase())) title = `Neue Notiz ${counter++}`;
+  while (vault.notes.some(note => note.path.toLowerCase() === `${folder ? `${folder}/` : ''}${title}.md`.toLowerCase())) title = `Neue Notiz ${counter++}`;
   return title;
 }
 const uid = () => crypto.randomUUID();
@@ -68,6 +68,7 @@ function Workspace() {
   const [searchText, setSearchText] = useState('');
   const [dialog, setDialog] = useState('');
   const [field, setField] = useState('');
+  const [folderParent, setFolderParent] = useState('');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -255,11 +256,11 @@ function Workspace() {
     const note = vault.notes.find(item => item.id === id); if (!note) return;
     setActiveId(id); setTitle(note.title); setBody(note.body); setTabs(current => current.includes(id) ? current : [...current, id]); setMode(nextMode); setSidebarOpen(false);
   }
-  function createNote() {
-    const name = uniqueNoteTitle(vault);
-    const siblings = sortNotes(vault.notes.filter(item => !parentPath(item.path)));
+  function createNote(inFolder = '') {
+    const name = uniqueNoteTitle(vault, inFolder);
+    const siblings = sortNotes(vault.notes.filter(item => parentPath(item.path) === inFolder));
     const normalizedOrder = new Map(siblings.map((item, index) => [item.id, index]));
-    const note = { id: uid(), title: name, path: `${name}.md`, body: '', order: siblings.length, created: Date.now(), updated: Date.now() };
+    const note = { id: uid(), title: name, path: `${inFolder ? `${inFolder}/` : ''}${name}.md`, body: '', order: siblings.length, created: Date.now(), updated: Date.now() };
     updateVault(current => ({ ...current, notes: [...current.notes.map(item => normalizedOrder.has(item.id) ? { ...item, order: normalizedOrder.get(item.id) } : item), note] }));
     setActiveId(note.id); setTabs(current => [...current, note.id]); setTitle(note.title); setBody(''); setMode('edit');
     window.setTimeout(() => noteInputRef.current?.focus(), 0);
@@ -344,16 +345,43 @@ function Workspace() {
     }));
     notify(destination ? `Ordner nach „${destination}“ verschoben` : 'Ordner auf die Hauptebene verschoben');
   }
+  function renameFolder(source, rawName) {
+    const name = cleanTitle(rawName);
+    const nextRoot = `${parentPath(source) ? `${parentPath(source)}/` : ''}${name}`;
+    if (nextRoot === source) return;
+    const movingFolders = vault.folders.filter(folder => folder === source || folder.startsWith(`${source}/`));
+    const mappedFolders = new Map(movingFolders.map(folder => [folder, `${nextRoot}${folder.slice(source.length)}`]));
+    const unchanged = new Set(vault.folders.filter(folder => !mappedFolders.has(folder)).map(folder => folder.toLocaleLowerCase()));
+    if ([...mappedFolders.values()].some(folder => unchanged.has(folder.toLocaleLowerCase()))) return notify('An dieser Stelle gibt es bereits einen gleichnamigen Ordner.');
+    const movingNotes = vault.notes.filter(note => note.path.startsWith(`${source}/`));
+    const mappedNotes = new Map(movingNotes.map(note => [note.id, `${nextRoot}${note.path.slice(source.length)}`]));
+    const unchangedNotes = new Set(vault.notes.filter(note => !mappedNotes.has(note.id)).map(note => note.path.toLocaleLowerCase()));
+    if ([...mappedNotes.values()].some(path => unchangedNotes.has(path.toLocaleLowerCase()))) return notify('Durch das Umbenennen würde eine Notiz überschrieben.');
+    updateVault(current => ({ ...current, folders: current.folders.map(folder => mappedFolders.get(folder) || folder), notes: current.notes.map(note => mappedNotes.has(note.id) ? { ...note, path: mappedNotes.get(note.id), updated: Date.now() } : note) }));
+    notify(`Ordner „${name}“ umbenannt`);
+  }
+  function deleteFolder(folder) {
+    const childFolders = vault.folders.filter(item => item === folder || item.startsWith(`${folder}/`));
+    const removedNotes = vault.notes.filter(note => note.path.startsWith(`${folder}/`));
+    if (!window.confirm(`„${folder}“ und ${removedNotes.length} Datei(en) sowie alle Unterordner löschen?`)) return;
+    const removedIds = new Set(removedNotes.map(note => note.id));
+    updateVault(current => ({ ...current, folders: current.folders.filter(item => !childFolders.includes(item)), notes: current.notes.filter(note => !removedIds.has(note.id)) }));
+    setTabs(current => current.filter(id => !removedIds.has(id)));
+    if (activeId && removedIds.has(activeId)) { setActiveId(null); setTitle(''); setBody(''); }
+    notify(`Ordner „${folder}“ gelöscht`);
+  }
   function addFolder() {
     const name = cleanTitle(field.trim()); if (!field.trim()) return;
-    updateVault(current => ({ ...current, folders: [...new Set([...current.folders, name])] })); setField(''); setDialog(''); notify(`Ordner „${name}“ erstellt`);
+    const path = `${folderParent ? `${folderParent}/` : ''}${name}`;
+    if (vault.folders.some(folder => folder.toLocaleLowerCase() === path.toLocaleLowerCase())) return notify('Dieser Ordner existiert bereits.');
+    updateVault(current => ({ ...current, folders: [...new Set([...current.folders, path])] })); setField(''); setDialog(''); notify(`Ordner „${name}“ erstellt`);
   }
   function addVault() {
     if (!field.trim()) return;
     const item = { id: uid(), name: field.trim(), folders: [], notes: [] };
     setDb(current => ({ ...current, vaults: [...current.vaults, item] })); setVaultId(item.id); setActiveId(null); setTabs([]); setField(''); setDialog('');
   }
-  function startNewFolder() { setField(''); setDialog('folder'); }
+  function startNewFolder(parent = '') { setFolderParent(parent); setField(''); setDialog('folder'); }
   function exportNote(note) {
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([note.body], { type: 'text/markdown;charset=utf-8' }));
     link.download = note.path.split('/').pop(); link.click(); URL.revokeObjectURL(link.href);
@@ -415,7 +443,7 @@ function Workspace() {
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span><select className="workspace-select" value={vault.id} aria-label="Vault auswählen" onChange={event => { if (event.target.value === '__new__') { setField(''); setDialog('vault'); } else { setVaultId(event.target.value); setActiveId(null); setTabs([]); } }}>
         {db.vaults.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="__new__">＋ Neuer Vault</option>
       </select></div><button className="icon-button" aria-label="Neuen Vault erstellen" title="Neuen Vault erstellen" onClick={() => { setField(''); setDialog('vault'); }}><Plus size={19}/></button></div>
-      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote}/>
+      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onRenameFolder={renameFolder} onDeleteFolder={deleteFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote}/>
       <div className="sidebar-status"><span className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/><span>{auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span></div>
     </aside>
     <main className="main-area">
@@ -435,7 +463,7 @@ function Workspace() {
     </main>
 
     <DialogFrame open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')} title={dialog === 'folder' ? 'Neuer Ordner' : dialog === 'vault' ? 'Neuer Vault' : 'Markdown-Vault importieren'} description={dialog === 'import' ? 'Wähle einen Ordner oder mehrere Markdown-Dateien aus.' : 'Gib einen Namen ein, um fortzufahren.'}>
-      {dialog === 'folder' || dialog === 'vault' ? <form className="dialog-form" onSubmit={event => { event.preventDefault(); dialog === 'folder' ? addFolder() : addVault(); }}><label htmlFor="name-field">{dialog === 'folder' ? 'Ordnername' : 'Vault-Name'}</label><input id="name-field" autoFocus value={field} onChange={event => setField(event.target.value)} placeholder={dialog === 'folder' ? 'z. B. Projekte' : 'Mein Projekt'}/><div className="dialog-actions"><button type="button" className="button button-ghost" onClick={() => setDialog('')}>Abbrechen</button><button className="button button-primary">Erstellen</button></div></form> : <div className="dialog-form"><p>Markdown-Dateien mit Ordnerstruktur auswählen:</p><div className="dialog-actions"><label className="button button-outline file-picker-label">Ordner wählen<input type="file" webkitdirectory directory multiple hidden onChange={pickFile}/></label><label className="button button-outline file-picker-label">Dateien wählen<input type="file" multiple accept=".md,.markdown,.txt" hidden onChange={pickFile}/></label></div></div>}
+      {dialog === 'folder' || dialog === 'vault' ? <form className="dialog-form" onSubmit={event => { event.preventDefault(); dialog === 'folder' ? addFolder() : addVault(); }}><label htmlFor="name-field">{dialog === 'folder' ? 'Ordnername' : 'Vault-Name'}</label><input id="name-field" autoFocus value={field} onChange={event => setField(event.target.value)} placeholder={dialog === 'folder' ? 'z. B. Projekte' : 'Mein Projekt'}/>{dialog === 'folder' && folderParent && <p>Wird in „{folderParent}“ angelegt.</p>}<div className="dialog-actions"><button type="button" className="button button-ghost" onClick={() => setDialog('')}>Abbrechen</button><button className="button button-primary">Erstellen</button></div></form> : <div className="dialog-form"><p>Markdown-Dateien mit Ordnerstruktur auswählen:</p><div className="dialog-actions"><label className="button button-outline file-picker-label">Ordner wählen<input type="file" webkitdirectory="" directory="" multiple hidden onChange={pickFile}/></label><label className="button button-outline file-picker-label">Dateien wählen<input type="file" multiple accept=".md,.markdown,.txt" hidden onChange={pickFile}/></label></div></div>}
     </DialogFrame>
 
     <DialogFrame open={searchOpen} onOpenChange={setSearchOpen} title="Suche im Wissensgarten" description="Volltextsuche in allen Notizen dieses Vaults.">

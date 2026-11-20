@@ -26,7 +26,7 @@ const firebaseConfig = {
 const firebaseEnabled = String(env.VITE_CLOUD_ENABLED || 'false').toLowerCase() === 'true' && Object.values(firebaseConfig).every(Boolean);
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
-for (const file of ['index.html', 'styles.css', 'app.js', 'firebase-auth.js', 'manifest.webmanifest', 'icon.svg', 'sw.js', 'icons/icon-192.png', 'icons/icon-512.png']) {
+for (const file of ['index.html', 'login.html', 'styles.css', 'app.js', 'firebase-auth.js', 'components/app-ui.js', 'components/login-page.js', 'manifest.webmanifest', 'icon.svg', 'sw.js', 'icons/icon-192.png', 'icons/icon-512.png']) {
   const destination = path.join(out, file);
   await mkdir(path.dirname(destination), { recursive: true });
   await cp(path.join(root, file), destination);

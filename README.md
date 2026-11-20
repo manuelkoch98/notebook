@@ -2,6 +2,10 @@
 
 Eine eigenständig gestaltete, browserbasierte Notiz-App. Der erste Abschnitt speichert Vaults und Markdown-Notizen lokal im Browser. Firebase, sichere Regeln, ZIP-Roundtrip, Desktop-Installer und kollaborationssichere Synchronisierung sind noch Arbeitsstände, keine fertigen Funktionen.
 
+## Aufbau der Oberfläche
+
+`/login.html` ist eine eigenständige Anmeldeseite. Nicht angemeldete Nutzer werden von `/` dorthin weitergeleitet; nach erfolgreicher Anmeldung führt Firebase zurück zum Arbeitsbereich. Die UI-Bereiche sind native Web Components in `components/` (Login, Navigationsleiste, Vault-Seitenleiste, Editor/Arbeitsbereich und Dialogcontainer). Die Anwendungssteuerung und Notizaktionen sind vorerst noch zentral in `app.js`; eine vollständige Aufteilung der Fachlogik in kleinere Module ist noch offen.
+
 ## Lokal starten
 
 Voraussetzungen: Node.js 16+. Im Projektordner:

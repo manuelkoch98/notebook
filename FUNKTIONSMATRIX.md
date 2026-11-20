@@ -6,7 +6,7 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 
 | Bereich / Funktion | Stand | Prüfmethode | Offene Kompatibilitätslücken |
 |---|---|---|---|
-| Eigenständiges Branding und Gestaltung | Fertig | UI-Prüfung Atelier | Kein Obsidian-Branding/Asset übernommen |
+| Eigenständiges Branding und Gestaltung | App, Login, SVG-Favicon, PWA- und Desktop-Icons verwenden dieselbe Atelier-Marke | SVG/PNG visuell verglichen; `npm run desktop:icons` erzeugte macOS- und Windows-Icon-Dateien | Betriebssystem-Icons nicht auf installierten Desktop-Builds geprüft |
 | Separate Login-Seite und Auth-Route | React-Route `/login`; Login-Logo verwendet dieselbe Atelier-Marke wie die Startseite | Browser: `/` ohne Sitzung leitet zu `/login`; Login-Ansicht und Markenfarben/Logoabmessungen geprüft | Erfolgreiche Kontoanmeldung und Rückleitung mit echtem Firebase-Konto noch nicht geprüft |
 | UI-Komponenten | React + Radix UI, shadcn-inspiriertes Designsystem | Browser: Login, Datei-Menü, Profil-Menü und Arbeitsbereich gerendert | Keine shadcn CLI-generierten Komponenten; eigener CSS-/Token-Layer auf Radix |
 | Seitenleistenbreite | Ziehbarer Trenner zwischen Dateibaum und Arbeitsfläche; Breite lokal gespeichert; Tastatursteuerung mit Pfeiltasten | Browser: 256 → 356 px gezogen, nach Neuladen 356 px wiederhergestellt | Auf schmalen Mobilansichten ausgeblendet; dort bleibt die Sidebar als Overlay |

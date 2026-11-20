@@ -4,17 +4,17 @@ Eine eigenständig gestaltete, browserbasierte Notiz-App. Der erste Abschnitt sp
 
 ## Aufbau der Oberfläche
 
-`/login.html` ist eine eigenständige Anmeldeseite. Nicht angemeldete Nutzer werden von `/` dorthin weitergeleitet; nach erfolgreicher Anmeldung führt Firebase zurück zum Arbeitsbereich. Die UI-Bereiche sind native Web Components in `components/` (Login, Navigationsleiste, Vault-Seitenleiste, Editor/Arbeitsbereich und Dialogcontainer). Die Anwendungssteuerung und Notizaktionen sind vorerst noch zentral in `app.js`; eine vollständige Aufteilung der Fachlogik in kleinere Module ist noch offen.
+Die App ist eine React-Anwendung mit React Router. Die Anmeldung ist eine echte Route unter `/login`; unangemeldete Nutzer werden von `/` dorthin weitergeleitet, nach erfolgreicher Anmeldung geht es zurück zum Arbeitsbereich. Wiederverwendbare Oberflächen liegen als React-Komponenten unter `src/components/`, Authentifizierung in `src/auth/`, und der Workspace-Controller in `src/App.jsx`. Radix UI liefert zugängliche Kontext-, Dropdown- und Dialog-Menüs; die Komponenten folgen den neutralen shadcn/ui-Farb- und Abstands-Token.
 
 ## Lokal starten
 
-Voraussetzungen: Node.js 16+. Im Projektordner:
+Voraussetzungen: Node.js 20.19+ oder Node.js 22.12+. Im Projektordner:
 
 ```sh
 npm run dev
 ```
 
-Dann `http://localhost:4173` öffnen. Die PWA benötigt localhost oder HTTPS. Daten verbleiben zunächst in `localStorage` des Browsers und werden durch Löschen der Website-Daten entfernt. Noch keine sensiblen Produktivnotizen eintragen.
+Dann `http://localhost:4178` öffnen. Die Login-Seite ist `http://localhost:4178/login`. Vite liefert `/login` direkt an den React Router aus. Die PWA benötigt localhost oder HTTPS. Daten verbleiben derzeit in `localStorage` des Browsers und sind noch nicht über Firebase synchronisiert.
 
 ## Firebase
 
@@ -28,7 +28,7 @@ Geplantes Datenmodell: `users/{uid}/vaults/{vaultId}` (Metadaten), darunter `not
 
 ## Vercel
 
-Vercel → Add New → Project → privates GitHub-Repository importieren. Framework „Other“, Build Command `npm run build`, Output Directory `dist`. `vercel.json` setzt PWA-Header. Die `VITE_FIREBASE_*`-Werte als Production/Preview/Development Environment Variables und `VITE_CLOUD_ENABLED=true` setzen. Nutzerverwaltung ist vorbereitet; die Web-App ist noch nicht für echte Notiz-Cloud-Synchronisierung bereit.
+Vercel → Add New → Project → privates GitHub-Repository importieren. Framework Preset „Vite“, Build Command `npm run build`, Output Directory `dist`. `vercel.json` schreibt Client-Routen wie `/login` auf `index.html` um und setzt PWA-Header. Die `VITE_FIREBASE_*`-Werte als Production/Preview/Development Environment Variables und `VITE_CLOUD_ENABLED=true` setzen. Nutzerverwaltung ist vorbereitet; die Web-App ist noch nicht für echte Notiz-Cloud-Synchronisierung bereit.
 
 ## Desktop
 

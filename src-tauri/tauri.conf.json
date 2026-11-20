@@ -5,7 +5,7 @@
   "identifier": "com.manuelkoch98.atelier",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:4173",
+    "devUrl": "http://localhost:4178",
     "beforeBuildCommand": "npm run build && npm run desktop:icons",
     "frontendDist": "../dist"
   },

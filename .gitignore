@@ -3,7 +3,9 @@
 !.env.example
 node_modules/
 dist/
+public/firebase-config.js
 target/
 .vercel/
+.playwright-mcp/
 .DS_Store
 *.log

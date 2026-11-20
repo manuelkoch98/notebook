@@ -7,10 +7,15 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 | Bereich / Funktion | Stand | Prüfmethode | Offene Kompatibilitätslücken |
 |---|---|---|---|
 | Eigenständiges Branding und Gestaltung | Fertig | UI-Prüfung Atelier | Kein Obsidian-Branding/Asset übernommen |
-| Separate Login-Seite und Auth-Route | Eingebaut | Browser: `/` ohne Sitzung leitet zu `/login.html`; Login-Komponente erscheint | Erfolgreiche Kontoanmeldung und Rückleitung mit echtem Firebase-Konto noch nicht geprüft |
-| UI-Komponenten | Native Web Components | Browser: Custom-Elemente für Rail, Sidebar, Arbeitsbereich, Login und Dialogcontainer gerendert | Fachlogik/Notizaktionen liegen noch zentral in `app.js` |
+| Separate Login-Seite und Auth-Route | React-Route `/login` | Browser: `/` ohne Sitzung leitet zu `/login`; Login-Ansicht erscheint | Erfolgreiche Kontoanmeldung und Rückleitung mit echtem Firebase-Konto noch nicht geprüft |
+| UI-Komponenten | React + Radix UI, shadcn-inspiriertes Designsystem | Browser: Login, Datei-Menü, Profil-Menü und Arbeitsbereich gerendert | Keine shadcn CLI-generierten Komponenten; eigener CSS-/Token-Layer auf Radix |
 | Vaults wechseln und anlegen | Lokal prototypisch | UI manuell | Noch kein Nutzerkonto-/Cloud-Vault; kein Löschen/Umbenennen |
-| Datei- und Ordnerbaum | Lokal prototypisch | UI manuell | Verschachtelte Ordnerdarstellung eingeschränkt; kein Umbenennen/Verschieben von Ordnern |
+| Datei- und Ordnerbaum | Lokal; verschachtelt und einklappbar | Browser: Einrückung und Disclosure-Maße geprüft | Ordner selbst noch nicht umbenennbar/löschbar |
+| Notiz-Kontextmenü | Öffnen, Umbenennen, Verschieben, Exportieren, Löschen | Browser: Rechtsklick öffnet Radix-Menü und Zielordner-Untermenü | Tastatur-/Screenreader-Rundgang offen; Löschen nutzt Browserbestätigung |
+| Notizen per Drag-and-drop verschieben | Implementiert | Browser: Notiz in Zielordner gezogen; Pfad wurde aktualisiert | Verschieben über Geräte hinweg erst nach Cloud-Sync |
+| Notiz aus Dateibaum in Editor ziehen | Implementiert | Browser: Ziehen in Vorschau fügte `[[Wikilink]]` ein und wechselte in Bearbeiten | Drop-Position in gerendertem Vorschautext wird an das Ende gesetzt |
+| Umbenennen per Enter/Doppelklick | Implementiert | Browser: Enter öffnet Inline-Umbenennung; Doppelklick ist als zusätzlicher Trigger eingebaut | Rename-Kollision wird abgefangen; weitere Tastaturprüfung offen |
+| Profilmenü am Avatar | Profil, Einstellungen und Abmelden | Browser: lokales Profil-/Einstellungsmenü geöffnet | Firebase-Abmeldung mit echtem angemeldetem Konto nicht ausgeführt |
 | Markdown bearbeiten, Live-Vorschau, Lesemodus | Lokal prototypisch | Browserlauf: Markdown eingegeben und Vorschau sichtbar | Kein CommonMark/GFM-Vollumfang; Tabellen, Callouts, Tasks und Plugins fehlen |
 | Tabs | Lokal prototypisch | Browserlauf: zwei offene Notiz-Tabs | Keine geteilten Ansichten, persistente Tab-Sitzung oder Tab-Gruppen |
 | Volltextsuche | Fertig, lokale Daten | Browserlauf: Suche nach „Testwissen“ lieferte Notiz | Kein Operator-/Query-Syntax, Ergebnisvorschau oder Suche über Cloud |
@@ -34,7 +39,7 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 | Canvas | Offen | Matrix | Obsidian-Canvas-JSON-Import/Export nicht implementiert |
 | Bases | Offen | Matrix | `.base`-Format, Views und Formeln nicht implementiert |
 | Themes, Plugins, Snippets | Offen | separat zu prüfen | Community-Plugin-APIs sind derzeit nicht kompatibel; keine Sandbox-/API-Schicht |
-| Firebase Authentication | Google + E-Mail/Passwort eingebunden | Browser: SDK lädt; unangemeldeter Aufruf `/` wird auf `/login.html` geleitet | Firebase Console muss beide Anbieter und produktive Domain freischalten; erfolgreiche Testanmeldung noch offen |
+| Firebase Authentication | Google + E-Mail/Passwort eingebunden | Browser: SDK lädt; unangemeldeter Aufruf `/` wird auf `/login` geleitet | Firebase Console muss beide Anbieter und produktive Domain freischalten; erfolgreiche Testanmeldung noch offen |
 | Firestore-Synchronisierung | Offen | Emulator erforderlich | Merge-Queue, Offline-Änderungen und Konfliktkopien fehlen |
 | Cloud Storage | Offen | Emulator erforderlich | Dateiupload/-download und Regeln vorbereitet, Client fehlt |
 | Nutzer-/Vault-Sicherheitsregeln | Regeln + Emulator-Test vorbereitet | `npm run test:rules` gestartet, Emulatorstart scheiterte | Java-Binärdatei ist auf diesem Mac nur ein JRE-Hinweis ohne Runtime; außerdem blockiert DNS den Firebase-CLI-Remote-Aufruf. Firestore/Storage-Regeln noch nicht empirisch bestätigt |
@@ -53,4 +58,4 @@ Stand: 20.11.2026 · Referenz: [Obsidian Help](https://obsidian.md/help) und sic
 
 Manuelle Browser-Abnahme am 20.11.2026: Notiz anlegen, Markdown bearbeiten, Vorschau, Wikilink öffnen, Zielnotiz umbenennen (eingehender Link aktualisiert), Volltext suchen; alles bestätigt. Nach UI-Korrektur zusätzlich: Google-/E-Mail-Login-Ansicht, Sidebar-Aktionslayout, Ordnerdialog/-einklappen sowie Klick Vorschau → Bearbeiten und Klick außerhalb → Vorschau geprüft. Firebase-SDK-Module laden im Browser. `npm run check` und `npm run build` erfolgreich. Manifest, beide PNG-Icons und aktiver Service Worker geprüft. `npm run test:rules` wurde versucht, aber Emulatorstart scheiterte: Java meldet, dass keine Java-Runtime vorhanden ist, und der Firebase CLI Remote-Aufruf scheitert an DNS. ZIP-Roundtrip, Import/Export mit Testvault, erfolgreiche Firebase Emulator-Prüfung, tatsächliche Anmeldung, Offline-/Mehrgeräte-Sync und Desktop-Installer wurden nicht geprüft.
 
-Zusatzprüfung Auth/UI-Aufteilung am 20.11.2026: frischer lokaler Origin mit Firebase-Auth aktiv leitete `/` auf `/login.html` um; Google- und E-Mail-Formular wurden separat gerendert. Arbeitsbereich wurde bei deaktiviertem Auth-Flag über native Custom Elements gerendert. Eine erfolgreiche Anmeldung mit echtem Konto wurde nicht ausgeführt. `app.js` bleibt ein zentraler Controller.
+Zusatzprüfung React-UI am 20.11.2026: `/login` rendert die React-Login-Seite, unangemeldeter `/` leitet dorthin. Rechtsklick zeigte Dateiaktionen und Zielordner; Ziehen einer Notiz in einen Ordner änderte den Pfad. Ziehen einer Notiz in eine geöffnete Vorschau fügte einen Wikilink ein und wechselte in den Bearbeitungsmodus. Enter startet Inline-Umbenennung. Profilmenü, Einstellungen und Ordner-Pfeil-Ausrichtung wurden geprüft. `npm run check` und `npm run build` erfolgreich; echter Firebase-Login bleibt ungeprüft.

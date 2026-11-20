@@ -9,12 +9,34 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
     <title>Atelier — Wissenswerkstatt</title>
+    <script src="/firebase-config.js"></script>
+    <script>if (window.ATELIER_FIREBASE?.enabled) document.documentElement.classList.add('requires-auth');</script>
   </head>
   <body>
-    <div class="app-shell">
+    <main id="login-screen" class="login-screen hidden" aria-labelledby="login-title">
+      <section class="login-card">
+        <div class="login-brand"><span class="brand-mark">a<span>.</span></span><span>ATELIER</span></div>
+        <div class="welcome-kicker">DEIN PERSÖNLICHER WISSENSGARTEN</div>
+        <h1 id="login-title">Willkommen zurück.</h1>
+        <p class="login-intro">Melde dich an, um Atelier zu öffnen.</p>
+        <button id="google-sign-in" class="google-button"><span class="google-g">G</span> Mit Google fortfahren</button>
+        <div class="login-divider"><span>oder mit E-Mail</span></div>
+        <form id="email-form" class="login-form">
+          <label for="login-email">E-Mail-Adresse</label>
+          <input id="login-email" type="email" autocomplete="email" required placeholder="du@beispiel.at" />
+          <label for="login-password">Passwort</label>
+          <input id="login-password" type="password" autocomplete="current-password" required minlength="6" placeholder="Mindestens 6 Zeichen" />
+          <button id="email-submit" class="primary-button login-submit" type="submit">Anmelden</button>
+        </form>
+        <div class="login-links"><button id="create-account" class="text-button">Konto erstellen</button><button id="reset-password" class="text-button">Passwort vergessen?</button></div>
+        <p id="login-message" class="login-message" role="status" aria-live="polite"></p>
+        <p class="login-note">Deine Notizen werden derzeit lokal gespeichert. Die Cloud-Synchronisierung folgt als eigener Schritt.</p>
+      </section>
+    </main>
+    <div id="app-shell" class="app-shell">
       <aside class="rail">
         <div class="brand-mark">a<span>.</span></div>
-        <button class="rail-button active" title="Dateien" aria-label="Dateien" data-action="files"><svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M3.5 8.5V5a1.5 1.5 0 0 1 1.5-1.5h4l2 2"/></svg></button>
+        <button class="rail-button active" title="Dateien" aria-label="Dateien" aria-expanded="false" data-action="files"><svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M3.5 8.5V5a1.5 1.5 0 0 1 1.5-1.5h4l2 2"/></svg></button>
         <button class="rail-button" title="Suche" aria-label="Suche" data-action="search"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg></button>
         <button class="rail-button" title="Graph" aria-label="Graph" data-action="graph"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="17.5" cy="5" r="2"/><circle cx="18" cy="18" r="2"/><path d="m8 11 7.5-5M8 13l8 4"/></svg></button>
         <div class="rail-spacer"></div>
@@ -24,11 +46,11 @@
       </aside>
 
       <aside class="sidebar" id="sidebar">
-        <div class="workspace-row"><div><div class="eyebrow">DEIN ARBEITSBEREICH</div><button id="vault-switch" class="vault-switch">Mein Wissensgarten <span>⌄</span></button></div><button class="icon-button" title="Neuer Vault" data-action="new-vault">＋</button></div>
-        <div class="sidebar-tools"><button data-action="new-note">＋ <span>Neue Notiz</span></button><button data-action="new-folder">▱ <span>Neuer Ordner</span></button><button data-action="import">⇧ <span>Importieren</span></button></div>
+        <div class="workspace-row"><div class="workspace-name"><div class="eyebrow">DEIN ARBEITSBEREICH</div><button id="vault-switch" class="vault-switch">Mein Wissensgarten <span>⌄</span></button></div><button class="icon-button" title="Neuen Vault erstellen" aria-label="Neuen Vault erstellen" data-action="new-vault">＋</button></div>
+        <div class="sidebar-tools"><button data-action="new-note"><span class="tool-icon">＋</span><span>Neue Notiz</span></button><button data-action="new-folder"><span class="tool-icon">▱</span><span>Neuer Ordner</span></button><button data-action="import"><span class="tool-icon">⇧</span><span>Markdown oder Vault importieren</span></button></div>
         <div class="section-label">DATEIEN <button title="Sortieren" class="quiet">↕</button></div>
         <div id="file-tree" class="file-tree"></div>
-        <div class="sidebar-bottom"><div class="sync-dot"></div><span>Nur auf diesem Gerät</span><button class="quiet" data-action="sync-info" title="Synchronisierung">ⓘ</button></div>
+        <div class="sidebar-bottom"><div class="sync-dot"></div><span id="storage-label">Nur auf diesem Gerät</span><button class="quiet" data-action="sync-info" title="Synchronisierung">ⓘ</button><button class="quiet sign-out-button hidden" data-auth-sign-out title="Abmelden">↪</button></div>
       </aside>
 
       <main class="main-area">
@@ -68,6 +90,7 @@
     <input id="file-picker" type="file" accept=".md,.markdown,.txt" multiple hidden />
     <input id="folder-picker" type="file" webkitdirectory directory multiple hidden />
     <script src="/app.js" defer></script>
+    <script type="module" src="/firebase-auth.js"></script>
     <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
   </body>
 </html>

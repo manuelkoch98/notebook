@@ -26,7 +26,9 @@ function uniqueNoteTitle(vault) {
 const uid = () => crypto.randomUUID();
 const cleanTitle = value => value.trim().replace(/\.md$/i, '').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ') || 'Unbenannt';
 const parentPath = value => value.includes('/') ? value.slice(0, value.lastIndexOf('/')) : '';
+const sortNotes = notes => { const alphabetical = [...notes].sort((a, b) => a.title.localeCompare(b.title, 'de')); const fallback = new Map(alphabetical.map((note, index) => [note.id, index])); return alphabetical.sort((a, b) => (Number.isFinite(a.order) ? a.order : fallback.get(a.id)) - (Number.isFinite(b.order) ? b.order : fallback.get(b.id)) || a.title.localeCompare(b.title, 'de')); }
 const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const nextNoteOrder = notes => sortNotes(notes).length;
 
 function AuthGate({ children }) {
   const auth = useAuth();
@@ -110,11 +112,11 @@ function Workspace() {
         const remoteNotes = noteSnapshots.get(item.id) || [];
         const notes = remoteNotes.map(note => {
           const localNote = local?.notes.find(candidate => candidate.id === note.id);
-          const dirty = localNote && localNote.baseUpdatedAt !== undefined && (localNote.body !== localNote.baseBody || localNote.title !== localNote.baseTitle || localNote.path !== localNote.basePath);
-          return dirty ? localNote : { ...note, baseUpdatedAt: note.updatedAt, baseBody: note.body, baseTitle: note.title, basePath: note.path };
+          const dirty = localNote && localNote.baseUpdatedAt !== undefined && (localNote.body !== localNote.baseBody || localNote.title !== localNote.baseTitle || localNote.path !== localNote.basePath || localNote.order !== localNote.baseOrder);
+          return dirty ? localNote : { ...note, baseUpdatedAt: note.updatedAt, baseBody: note.body, baseTitle: note.title, basePath: note.path, baseOrder: note.order };
         });
         const remoteIds = new Set(remoteNotes.map(note => note.id));
-        const pendingLocal = (local?.notes || []).filter(note => !remoteIds.has(note.id) && (note.baseUpdatedAt === undefined || note.body !== note.baseBody || note.title !== note.baseTitle || note.path !== note.basePath));
+        const pendingLocal = (local?.notes || []).filter(note => !remoteIds.has(note.id) && (note.baseUpdatedAt === undefined || note.body !== note.baseBody || note.title !== note.baseTitle || note.path !== note.basePath || note.order !== note.baseOrder));
         return { id: item.id, name: item.data.name || 'Mein Wissensgarten', folders: item.data.folders || [], notes: [...notes, ...pendingLocal] };
       });
       if (cloudVaults.length) {
@@ -146,7 +148,7 @@ function Workspace() {
       for (const item of docs) if (!noteUnsubscribes.has(item.id)) {
         const notesRef = fs.collection(root, item.id, 'notes');
         noteUnsubscribes.set(item.id, fs.onSnapshot(notesRef, notes => {
-          noteSnapshots.set(item.id, notes.docs.map(note => ({ id: note.id, ...note.data(), baseUpdatedAt: note.data().updatedAt, baseBody: note.data().body, baseTitle: note.data().title, basePath: note.data().path })));
+          noteSnapshots.set(item.id, notes.docs.map(note => ({ id: note.id, ...note.data(), baseUpdatedAt: note.data().updatedAt, baseBody: note.data().body, baseTitle: note.data().title, basePath: note.data().path, baseOrder: note.data().order })));
           readyVaults.add(item.id);
           applyCloudSnapshot(latestVaultDocs);
         }, () => setCloudStatus('Firebase konnte Notizen nicht laden')));
@@ -178,23 +180,23 @@ function Workspace() {
           const remote = await fs.getDocs(notesRef);
           const localIds = new Set(item.notes.map(note => note.id));
           await Promise.all(remote.docs.filter(note => !localIds.has(note.id)).map(note => fs.deleteDoc(note.ref)));
-          const normalized = note => ({ id: note.id, title: note.title, path: note.path, body: note.body, created: note.created, updated: note.updated });
+          const normalized = note => ({ id: note.id, title: note.title, path: note.path, body: note.body, created: note.created, updated: note.updated, ...(Number.isFinite(note.order) ? { order: note.order } : {}) });
           for (const note of item.notes) {
             const noteRef = fs.doc(notesRef, note.id);
             const result = await fs.runTransaction(auth.db, async transaction => {
               const snapshot = await transaction.get(noteRef);
               const existing = snapshot.exists() ? snapshot.data() : null;
-              const localChanged = note.baseUpdatedAt === undefined || note.body !== note.baseBody || note.title !== note.baseTitle || note.path !== note.basePath;
+              const localChanged = note.baseUpdatedAt === undefined || note.body !== note.baseBody || note.title !== note.baseTitle || note.path !== note.basePath || note.order !== note.baseOrder;
               const remoteChanged = existing && note.baseUpdatedAt !== undefined && existing.updatedAt !== note.baseUpdatedAt;
               const now = Date.now();
-              if (remoteChanged && localChanged && (existing.body !== note.body || existing.title !== note.title || existing.path !== note.path)) {
+              if (remoteChanged && localChanged && (existing.body !== note.body || existing.title !== note.title || existing.path !== note.path || existing.order !== note.order)) {
                 const conflictId = uid();
                 const conflictTitle = cleanTitle(`${note.title} (Konflikt ${new Date(now).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })})`);
                 const conflictPath = `${parentPath(note.path) ? `${parentPath(note.path)}/` : ''}${conflictTitle}.md`;
                 transaction.set(fs.doc(notesRef, conflictId), { ...normalized({ ...note, id: conflictId, title: conflictTitle, path: conflictPath }), updatedAt: now });
                 return { conflict: true, now, remote: existing, conflictId, conflictTitle, conflictPath };
               }
-              if (!existing || existing.body !== note.body || existing.title !== note.title || existing.path !== note.path || existing.updated !== note.updated) {
+              if (!existing || existing.body !== note.body || existing.title !== note.title || existing.path !== note.path || existing.updated !== note.updated || existing.order !== note.order) {
                 transaction.set(noteRef, { ...normalized(note), updatedAt: now }, { merge: true });
                 return { conflict: false, now };
               }
@@ -205,8 +207,8 @@ function Workspace() {
               setDb(current => ({ vaults: current.vaults.map(vault => {
                 if (vault.id !== item.id) return vault;
                 const existingNote = vault.notes.find(candidate => candidate.id === note.id);
-                const remoteNote = { id: note.id, ...result.remote, baseUpdatedAt: result.remote.updatedAt, baseBody: result.remote.body, baseTitle: result.remote.title, basePath: result.remote.path };
-                const conflictNote = { ...note, id: result.conflictId, title: result.conflictTitle, path: result.conflictPath, updated: result.now, baseUpdatedAt: result.now, baseBody: note.body, baseTitle: result.conflictTitle, basePath: result.conflictPath };
+                const remoteNote = { id: note.id, ...result.remote, baseUpdatedAt: result.remote.updatedAt, baseBody: result.remote.body, baseTitle: result.remote.title, basePath: result.remote.path, baseOrder: result.remote.order };
+                const conflictNote = { ...note, id: result.conflictId, title: result.conflictTitle, path: result.conflictPath, updated: result.now, baseUpdatedAt: result.now, baseBody: note.body, baseTitle: result.conflictTitle, basePath: result.conflictPath, baseOrder: note.order };
                 return { ...vault, notes: [...vault.notes.map(candidate => candidate.id === note.id ? remoteNote : candidate), ...(existingNote ? [] : [remoteNote]), conflictNote] };
               }) }));
             } else {
@@ -216,9 +218,9 @@ function Workspace() {
                   if (vault.id !== item.id) return vault;
                   let vaultChanged = false;
                   const notes = vault.notes.map(existing => {
-                    if (existing.id !== note.id || (existing.baseUpdatedAt === result.now && existing.baseBody === note.body && existing.baseTitle === note.title && existing.basePath === note.path)) return existing;
+                    if (existing.id !== note.id || (existing.baseUpdatedAt === result.now && existing.baseBody === note.body && existing.baseTitle === note.title && existing.basePath === note.path && existing.baseOrder === note.order)) return existing;
                     changed = true; vaultChanged = true;
-                    return { ...existing, baseUpdatedAt: result.now, baseBody: note.body, baseTitle: note.title, basePath: note.path };
+                    return { ...existing, baseUpdatedAt: result.now, baseBody: note.body, baseTitle: note.title, basePath: note.path, baseOrder: note.order };
                   });
                   return vaultChanged ? { ...vault, notes } : vault;
                 });
@@ -249,13 +251,16 @@ function Workspace() {
   }
   function notify(message) { setToast(message); window.setTimeout(() => setToast(''), 2300); }
   function openNote(id, nextMode = 'edit') {
+    if (mode === 'edit') commitTitle();
     const note = vault.notes.find(item => item.id === id); if (!note) return;
     setActiveId(id); setTitle(note.title); setBody(note.body); setTabs(current => current.includes(id) ? current : [...current, id]); setMode(nextMode); setSidebarOpen(false);
   }
   function createNote() {
     const name = uniqueNoteTitle(vault);
-    const note = { id: uid(), title: name, path: `${name}.md`, body: '', created: Date.now(), updated: Date.now() };
-    updateVault(current => ({ ...current, notes: [...current.notes, note] }));
+    const siblings = sortNotes(vault.notes.filter(item => !parentPath(item.path)));
+    const normalizedOrder = new Map(siblings.map((item, index) => [item.id, index]));
+    const note = { id: uid(), title: name, path: `${name}.md`, body: '', order: siblings.length, created: Date.now(), updated: Date.now() };
+    updateVault(current => ({ ...current, notes: [...current.notes.map(item => normalizedOrder.has(item.id) ? { ...item, order: normalizedOrder.get(item.id) } : item), note] }));
     setActiveId(note.id); setTabs(current => [...current, note.id]); setTitle(note.title); setBody(''); setMode('edit');
     window.setTimeout(() => noteInputRef.current?.focus(), 0);
   }
@@ -284,6 +289,10 @@ function Workspace() {
     if (!activeNote || !title.trim() || title === activeNote.title) return;
     renameNote(activeNote.id, title);
   }
+  function toggleNoteMode() {
+    if (mode === 'edit') { commitTitle(); setMode('read'); }
+    else setMode('edit');
+  }
   function deleteNote(id) {
     const note = vault.notes.find(item => item.id === id); if (!note) return;
     if (!window.confirm(`„${note.title}“ löschen?`)) return;
@@ -296,8 +305,24 @@ function Workspace() {
     const target = vault.notes.find(note => note.id === id); if (!target) return;
     const nextPath = `${folder ? `${folder}/` : ''}${target.path.split('/').pop()}`;
     if (vault.notes.some(note => note.id !== id && note.path.toLowerCase() === nextPath.toLowerCase())) return notify('In diesem Ordner gibt es bereits eine Datei mit diesem Namen.');
-    updateVault(current => ({ ...current, notes: current.notes.map(note => note.id === id ? { ...note, path: `${folder ? `${folder}/` : ''}${note.path.split('/').pop()}`, updated: Date.now() } : note) }));
+    const siblings = sortNotes(vault.notes.filter(note => note.id !== id && parentPath(note.path) === folder));
+    const positions = new Map(siblings.map((note, index) => [note.id, index]));
+    const destinationOrder = siblings.length;
+    updateVault(current => ({ ...current, notes: current.notes.map(note => note.id === id ? { ...note, path: nextPath, order: destinationOrder, updated: Date.now() } : positions.has(note.id) ? { ...note, order: positions.get(note.id) } : note) }));
     notify(folder ? `In „${folder}“ verschoben` : 'Auf die Hauptebene verschoben');
+  }
+  function reorderNote(id, targetId, after) {
+    const source = vault.notes.find(note => note.id === id);
+    const target = vault.notes.find(note => note.id === targetId);
+    if (!source || !target || source.id === target.id) return;
+    const destination = parentPath(target.path);
+    const nextPath = `${destination ? `${destination}/` : ''}${source.path.split('/').pop()}`;
+    if (vault.notes.some(note => note.id !== source.id && note.path.toLocaleLowerCase() === nextPath.toLocaleLowerCase())) return notify('In diesem Ordner gibt es bereits eine Datei mit diesem Namen.');
+    const siblings = sortNotes(vault.notes.filter(note => note.id !== source.id && parentPath(note.path) === destination));
+    const targetIndex = siblings.findIndex(note => note.id === target.id);
+    siblings.splice(Math.max(0, targetIndex + (after ? 1 : 0)), 0, source);
+    const positions = new Map(siblings.map((note, index) => [note.id, index]));
+    updateVault(current => ({ ...current, notes: current.notes.map(note => positions.has(note.id) ? { ...note, path: note.id === source.id ? nextPath : note.path, order: positions.get(note.id), updated: Date.now() } : note) }));
   }
   function moveFolder(source, destination) {
     if (!vault.folders.includes(source)) return;
@@ -340,7 +365,9 @@ function Workspace() {
       if (!/\.(md|markdown|txt)$/i.test(file.name)) continue;
       const rel = file.webkitRelativePath?.split('/').slice(1).join('/') || file.name;
       const path = rel.replace(/\.(markdown|txt)$/i, '.md'); const noteTitle = cleanTitle(path.split('/').pop());
-      imported.push({ id: uid(), title: noteTitle, path, body: await file.text(), created: Date.now(), updated: Date.now() });
+      const folder = parentPath(path);
+      const order = nextNoteOrder([...vault.notes.filter(item => parentPath(item.path) === folder), ...imported.filter(item => parentPath(item.path) === folder)]);
+      imported.push({ id: uid(), title: noteTitle, path, body: await file.text(), order, created: Date.now(), updated: Date.now() });
     }
     if (!imported.length) { setDialog(''); return notify('Keine Markdown-Dateien gefunden'); }
     updateVault(current => ({ ...current, notes: [...current.notes.filter(note => !imported.some(item => item.path === note.path)), ...imported], folders: [...new Set([...current.folders, ...imported.flatMap(note => { const parts = parentPath(note.path).split('/').filter(Boolean); return parts.map((_, index) => parts.slice(0, index + 1).join('/')); })])] }));
@@ -382,13 +409,13 @@ function Workspace() {
   }, [vault, searchText]);
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
 
-  return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} onPointerDown={event => { if (mode === 'edit' && activeNote && !event.target.closest('.note-view')) setMode('read'); }}>
+  return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} onPointerDown={event => { if (mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); if (!event.target.closest('.tree-note')) setMode('read'); } }}>
     <aside className="rail"><Link to="/" className="brand-mark" aria-label="Atelier Startseite" onClick={() => { setActiveId(null); setTabs([]); }}><span>a</span><i>.</i></Link><button className="rail-button active" title="Dateien" onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className="rail-button" title="Graph" onClick={() => setGraphOpen(true)}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
     <aside className="sidebar">
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span><select className="workspace-select" value={vault.id} aria-label="Vault auswählen" onChange={event => { if (event.target.value === '__new__') { setField(''); setDialog('vault'); } else { setVaultId(event.target.value); setActiveId(null); setTabs([]); } }}>
         {db.vaults.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="__new__">＋ Neuer Vault</option>
       </select></div><button className="icon-button" aria-label="Neuen Vault erstellen" title="Neuen Vault erstellen" onClick={() => { setField(''); setDialog('vault'); }}><Plus size={19}/></button></div>
-      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder}/>
+      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote}/>
       <div className="sidebar-status"><span className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/><span>{auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span></div>
     </aside>
     <main className="main-area">
@@ -397,7 +424,7 @@ function Workspace() {
       <div className="content-wrap">
         <section className="editor-pane" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note')) event.preventDefault(); }}>
           {!activeNote ? <div className="welcome-view"><p className="eyebrow">DEIN DIGITALER GARTEN</p><h1>Hallo <em>{(profileGreeting || auth.user?.displayName || 'Manuel').trim().split(/\s+/)[0]}.</em></h1><p className="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p><div className="welcome-actions"><button className="button button-primary" onClick={createNote}><FilePlus2 size={16}/> Erste Notiz schreiben</button><button className="button button-outline" onClick={() => setDialog('import')}><Download size={15}/> Vault importieren</button></div><div className="welcome-divider"/><div className="recent-head"><div><p className="eyebrow">LOS GEHT’S</p><h2>Dein Arbeitsbereich</h2></div><span className="local-badge"><i/> {auth.user ? cloudReady ? 'Mit Cloud synchronisiert' : cloudStatus : 'Lokal zwischengespeichert'}</span></div><div className="start-grid"><button className="start-card" onClick={createNote}><FilePlus2 size={18}/><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small></button><button className="start-card" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={18}/><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small></button><button className="start-card" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={18}/><strong>Schnell navigieren</strong><small>Befehle und Aktionen</small></button></div></div> : <article className="note-view" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note')) event.preventDefault(); }} onDrop={dropInEditor} onClick={event => { if (mode === 'read' && !event.target.closest('button,a')) setMode('edit'); }}>
-            <div className="note-heading"><div className="note-meta">{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'long',year:'numeric'}).format(new Date(activeNote.updated))}<span>·</span>{wordCount} Wörter</div><div className="note-actions"><button className="button button-ghost mode-toggle" onClick={() => setMode(current => current === 'edit' ? 'read' : 'edit')}>{mode === 'edit' ? 'Vorschau' : 'Bearbeiten'}</button><button className="icon-button" title="Umbenennen" onClick={() => { if (mode === 'edit') noteInputRef.current?.focus(); else { focusTitleRef.current = true; setMode('edit'); } }}><Pencil size={15}/></button><button className="icon-button" title="Markdown exportieren" onClick={() => exportNote(activeNote)}><Download size={15}/></button></div></div>
+            <div className="note-heading"><div className="note-meta">{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'long',year:'numeric'}).format(new Date(activeNote.updated))}<span>·</span>{wordCount} Wörter</div><div className="note-actions"><button className="button button-ghost mode-toggle" onClick={toggleNoteMode}>{mode === 'edit' ? 'Vorschau' : 'Bearbeiten'}</button><button className="icon-button" title="Umbenennen" onClick={() => { if (mode === 'edit') noteInputRef.current?.focus(); else { focusTitleRef.current = true; setMode('edit'); } }}><Pencil size={15}/></button><button className="icon-button" title="Markdown exportieren" onClick={() => exportNote(activeNote)}><Download size={15}/></button></div></div>
             {mode === 'edit' ? <><input ref={noteInputRef} className="note-title-input read-title" value={title} onChange={event => setTitle(event.target.value)} onBlur={commitTitle} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitTitle(); event.currentTarget.blur(); } }}/><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><textarea ref={editorRef} className="markdown-editor" value={body} onChange={event => updateBody(event.target.value)} placeholder={'Schreib deinen Gedanken auf …\n\nTipp: Nutze #tags und [[Wikilinks]].'}/></> : <><h1 className="read-title">{activeNote.title}</h1><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><div onClick={() => setMode('edit')}><MarkdownPreview source={body} onWiki={resolveWiki}/></div></>}
             <div className="editor-footer"><span><i className="status-dot"/> Alle Änderungen gespeichert</span><span>Markdown · UTF-8</span></div>
           </article>}

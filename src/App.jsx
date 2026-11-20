@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Command, FilePlus2, FileText, Search, Share2, PanelLeft, X, Plus, Network, Pencil, Download, CircleHelp } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Check, ChevronDown, Command, FilePlus2, FileText, Search, Share2, PanelLeft, X, Plus, Network, Pencil, Trash2, Download, CircleHelp } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider.jsx';
 import FileTree from './components/FileTree.jsx';
 import LoginPage from './components/LoginPage.jsx';
@@ -68,6 +69,7 @@ function Workspace() {
   const [searchText, setSearchText] = useState('');
   const [dialog, setDialog] = useState('');
   const [field, setField] = useState('');
+  const [editingVaultId, setEditingVaultId] = useState('');
   const [folderParent, setFolderParent] = useState('');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
@@ -404,6 +406,43 @@ function Workspace() {
     const item = { id: uid(), name: field.trim(), folders: [], notes: [] };
     setDb(current => ({ ...current, vaults: [...current.vaults, item] })); setVaultId(item.id); setActiveId(null); setTabs([]); setField(''); setDialog('');
   }
+  function renameVault(id, rawName) {
+    const name = rawName.trim();
+    if (!name) return notify('Der Vault-Name darf nicht leer sein.');
+    if (db.vaults.some(item => item.id !== id && item.name.toLocaleLowerCase() === name.toLocaleLowerCase())) return notify('Ein Vault mit diesem Namen existiert bereits.');
+    setDb(current => ({ ...current, vaults: current.vaults.map(item => item.id === id ? { ...item, name } : item) }));
+    setDialog(''); setEditingVaultId(''); setField(''); notify(`Vault in „${name}“ umbenannt`);
+  }
+  async function deleteVault(id) {
+    const target = db.vaults.find(item => item.id === id);
+    if (!target) return;
+    if (db.vaults.length <= 1) return notify('Lege zuerst einen weiteren Vault an, bevor du diesen löschst.');
+    if (!window.confirm(`Vault „${target.name}“ samt allen Notizen und Ordnern endgültig löschen?`)) return;
+    if (auth.user) {
+      if (!auth.db || !auth.firestoreSdk) return notify('Firebase ist noch nicht verbunden. Versuche es gleich noch einmal.');
+      const fs = auth.firestoreSdk;
+      try {
+        const vaultRef = fs.doc(fs.collection(auth.db, 'users', auth.user.uid, 'vaults'), target.id);
+        const notes = await fs.getDocs(fs.collection(vaultRef, 'notes'));
+        for (let offset = 0; offset < notes.docs.length; offset += 450) {
+          const batch = fs.writeBatch(auth.db);
+          notes.docs.slice(offset, offset + 450).forEach(note => batch.delete(note.ref));
+          await batch.commit();
+        }
+        await fs.deleteDoc(vaultRef);
+      } catch (error) { return notify('Vault konnte nicht aus Firebase gelöscht werden.'); }
+    }
+    const next = db.vaults.find(item => item.id !== id);
+    setDb(current => ({ ...current, vaults: current.vaults.filter(item => item.id !== id) }));
+    if (vaultId === id && next) { setVaultId(next.id); setActiveId(null); setTabs([]); setTitle(''); setBody(''); setMode('read'); }
+    notify(`Vault „${target.name}“ gelöscht`);
+  }
+  function startRenameVault(item = vault) { setEditingVaultId(item.id); setField(item.name); setDialog('vault-rename'); }
+  function switchVault(id) {
+    if (id === vaultId) return;
+    if (mode === 'edit') commitTitle();
+    setVaultId(id); setActiveId(null); setTabs([]); setTitle(''); setBody(''); setMode('read');
+  }
   function startNewFolder(parent = '') { setFolderParent(parent); setField(''); setDialog('folder'); }
   function exportNote(note) {
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([note.body], { type: 'text/markdown;charset=utf-8' }));
@@ -468,9 +507,16 @@ function Workspace() {
   return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` }} onPointerDown={event => { if (mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); if (!event.target.closest('.tree-note')) setMode('read'); } }}>
     <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setActiveId(null); setTabs([]); }}><span>a</span><i>.</i></Link><button className="rail-button active" title="Dateien" onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className="rail-button" title="Graph" onClick={() => setGraphOpen(true)}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
     <aside className="sidebar">
-      <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span><select className="workspace-select" value={vault.id} aria-label="Vault auswählen" onChange={event => { if (event.target.value === '__new__') { setField(''); setDialog('vault'); } else { setVaultId(event.target.value); setActiveId(null); setTabs([]); } }}>
-        {db.vaults.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="__new__">＋ Neuer Vault</option>
-      </select></div><button className="icon-button" aria-label="Neuen Vault erstellen" title="Neuen Vault erstellen" onClick={() => { setField(''); setDialog('vault'); }}><Plus size={19}/></button></div>
+      <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span>
+        <DropdownMenu.Root><DropdownMenu.Trigger asChild><button type="button" className="workspace-select-button" aria-label="Vault auswählen"><span>{vault.name}</span><ChevronDown size={15}/></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="workspace-menu" align="start" sideOffset={6}>
+          <div className="workspace-menu-label">VAULTS</div>
+          {db.vaults.map(item => <DropdownMenu.Item key={item.id} className="workspace-menu-item" onSelect={() => switchVault(item.id)}><Check size={15} className={item.id === vault.id ? 'workspace-check active' : 'workspace-check'}/><span>{item.name}</span></DropdownMenu.Item>)}
+          <DropdownMenu.Separator className="menu-separator"/>
+          <DropdownMenu.Item className="workspace-menu-item" onSelect={() => startRenameVault()}><Pencil size={15}/><span>Vault umbenennen</span></DropdownMenu.Item>
+          <DropdownMenu.Item className="workspace-menu-item danger" disabled={db.vaults.length <= 1} onSelect={() => deleteVault(vault.id)}><Trash2 size={15}/><span>Vault löschen</span></DropdownMenu.Item>
+          {db.vaults.length <= 1 && <div className="workspace-menu-hint">Zum Löschen zuerst einen weiteren Vault anlegen.</div>}
+        </DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root>
+      </div><button className="icon-button" aria-label="Neuen Vault erstellen" title="Neuen Vault erstellen" onClick={() => { setField(''); setDialog('vault'); }}><Plus size={19}/></button></div>
       <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onRenameFolder={renameFolder} onDeleteFolder={deleteFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote} onReorderFolder={reorderFolder}/>
       <div className="sidebar-status"><span className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/><span>{auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span></div>
     </aside>
@@ -496,8 +542,8 @@ function Workspace() {
       <footer className="statusbar"><span><i className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/> {auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span><span>{activeNote ? `${activeNote.title} · ${auth.user && cloudReady ? 'Cloud' : 'lokal'}` : 'Willkommen in atelier'}</span><span>Markdown · UTF-8</span></footer>
     </main>
 
-    <DialogFrame open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')} title={dialog === 'folder' ? 'Neuer Ordner' : dialog === 'vault' ? 'Neuer Vault' : 'Markdown-Vault importieren'} description={dialog === 'import' ? 'Wähle einen Ordner oder mehrere Markdown-Dateien aus.' : 'Gib einen Namen ein, um fortzufahren.'}>
-      {dialog === 'folder' || dialog === 'vault' ? <form className="dialog-form" onSubmit={event => { event.preventDefault(); dialog === 'folder' ? addFolder() : addVault(); }}><label htmlFor="name-field">{dialog === 'folder' ? 'Ordnername' : 'Vault-Name'}</label><input id="name-field" autoFocus value={field} onChange={event => setField(event.target.value)} placeholder={dialog === 'folder' ? 'z. B. Projekte' : 'Mein Projekt'}/>{dialog === 'folder' && folderParent && <p>Wird in „{folderParent}“ angelegt.</p>}<div className="dialog-actions"><button type="button" className="button button-ghost" onClick={() => setDialog('')}>Abbrechen</button><button className="button button-primary">Erstellen</button></div></form> : <div className="dialog-form"><p>Markdown-Dateien mit Ordnerstruktur auswählen:</p><div className="dialog-actions"><label className="button button-outline file-picker-label">Ordner wählen<input type="file" webkitdirectory="" directory="" multiple hidden onChange={pickFile}/></label><label className="button button-outline file-picker-label">Dateien wählen<input type="file" multiple accept=".md,.markdown,.txt" hidden onChange={pickFile}/></label></div></div>}
+    <DialogFrame open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')} title={dialog === 'folder' ? 'Neuer Ordner' : dialog === 'vault' ? 'Neuer Vault' : dialog === 'vault-rename' ? 'Vault umbenennen' : 'Markdown-Vault importieren'} description={dialog === 'import' ? 'Wähle einen Ordner oder mehrere Markdown-Dateien aus.' : dialog === 'vault-rename' ? 'Vergib einen neuen Namen für diesen Arbeitsbereich.' : 'Gib einen Namen ein, um fortzufahren.'}>
+      {dialog === 'folder' || dialog === 'vault' || dialog === 'vault-rename' ? <form className="dialog-form" onSubmit={event => { event.preventDefault(); if (dialog === 'folder') addFolder(); else if (dialog === 'vault-rename') renameVault(editingVaultId, field); else addVault(); }}><label htmlFor="name-field">{dialog === 'folder' ? 'Ordnername' : 'Vault-Name'}</label><input id="name-field" autoFocus value={field} onChange={event => setField(event.target.value)} placeholder={dialog === 'folder' ? 'z. B. Projekte' : 'Mein Projekt'}/>{dialog === 'folder' && folderParent && <p>Wird in „{folderParent}“ angelegt.</p>}<div className="dialog-actions"><button type="button" className="button button-ghost" onClick={() => setDialog('')}>Abbrechen</button><button className="button button-primary">{dialog === 'vault-rename' ? 'Speichern' : 'Erstellen'}</button></div></form> : <div className="dialog-form"><p>Markdown-Dateien mit Ordnerstruktur auswählen:</p><div className="dialog-actions"><label className="button button-outline file-picker-label">Ordner wählen<input type="file" webkitdirectory="" directory="" multiple hidden onChange={pickFile}/></label><label className="button button-outline file-picker-label">Dateien wählen<input type="file" multiple accept=".md,.markdown,.txt" hidden onChange={pickFile}/></label></div></div>}
     </DialogFrame>
 
     <DialogFrame open={searchOpen} onOpenChange={setSearchOpen} title="Suche im Wissensgarten" description="Volltextsuche in allen Notizen dieses Vaults.">

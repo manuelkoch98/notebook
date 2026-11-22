@@ -11,6 +11,7 @@ import BrandMark from './components/BrandMark.jsx';
 import DialogFrame from './components/ui/DialogFrame.jsx';
 import ConfirmDialog from './components/ui/ConfirmDialog.jsx';
 import KnowledgeChat from './components/KnowledgeChat.jsx';
+import { validateChatCreation } from './chatCreation.js';
 
 const DB_KEY = 'atelier-db-v1';
 const freshVault = () => ({ id: 'main', name: 'Mein Wissensgarten', folders: ['Ideen', 'Notizen'], notes: [
@@ -154,6 +155,7 @@ function Workspace() {
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatEditNoteId, setChatEditNoteId] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [detailsCollapsed, setDetailsCollapsed] = useState(() => localStorage.getItem('atelier-details-collapsed') === 'true');
@@ -170,6 +172,8 @@ function Workspace() {
   const focusTitleRef = useRef(false);
   const vault = db.vaults.find(item => item.id === vaultId) || db.vaults[0];
   const activeNote = vault?.notes.find(note => note.id === activeId) || null;
+  const chatBesideDocument = chatOpen && Boolean(activeNote || activePdf);
+  const standaloneChat = chatOpen && !chatBesideDocument;
   const dbRef = useRef(db);
   dbRef.current = db;
   const syncInFlight = useRef(false);
@@ -396,7 +400,129 @@ function Workspace() {
     if (saveLockRef.current) return;
     if (mode === 'edit') commitTitle();
     const note = vault.notes.find(item => item.id === id); if (!note) return;
+    setChatEditNoteId(current => current === id ? current : null);
     setActivePdf(null); setActiveId(id); setTitle(note.title); setBody(note.body); setTabs(current => current.includes(id) ? current : [...current, id]); setMode(nextMode); setSidebarOpen(false);
+  }
+  function openNoteWithAI(id) {
+    if (saveLockRef.current) return;
+    openNote(id);
+    setChatEditNoteId(id);
+    setChatOpen(true);
+  }
+  async function applyChatEdit(target, markdown) {
+    const matchesTarget = note => note?.id === target.id && note.title === target.title
+      && note.path === target.path && note.body === target.body;
+    const changedMessage = 'Die Notiz wurde seit dem Vorschlag geändert, verschoben oder gelöscht. Fordere einen neuen Vorschlag an.';
+    const targetVault = dbRef.current.vaults.find(item => item.id === target.vaultId);
+    const note = targetVault?.notes.find(item => item.id === target.id);
+    if (vault.id !== target.vaultId || !matchesTarget(note)) throw new Error(changedMessage);
+    if (saveLockRef.current || (mode === 'edit' && activeId === target.id)) {
+      throw new Error('Beende zuerst die laufende Bearbeitung und warte, bis sie gespeichert ist.');
+    }
+
+    const updated = Date.now();
+    if (!auth.user) {
+      updateVault(current => ({
+        ...current,
+        notes: current.notes.map(item => matchesTarget(item) ? { ...item, body: markdown, updated } : item),
+      }));
+      return;
+    }
+
+    const fs = auth.firestoreSdk;
+    if (!cloudReady || !fs || !auth.db || note.baseUpdatedAt === undefined
+      || note.body !== note.baseBody || note.title !== note.baseTitle || note.path !== note.basePath) {
+      throw new Error('Warte, bis diese Notiz mit Firebase synchronisiert ist, und versuche es erneut.');
+    }
+    const ref = fs.doc(auth.db, 'users', auth.user.uid, 'vaults', target.vaultId, 'notes', target.id);
+    await fs.runTransaction(auth.db, async transaction => {
+      const snapshot = await transaction.get(ref);
+      const remote = snapshot.exists() ? snapshot.data() : null;
+      if (!remote || !matchesTarget({ ...remote, id: snapshot.id }) || remote.updatedAt !== note.baseUpdatedAt) {
+        throw new Error(changedMessage);
+      }
+      transaction.update(ref, { body: markdown, updated, updatedAt: updated });
+    });
+  }
+  async function createChatItems(proposal) {
+    const currentVault = dbRef.current.vaults.find(item => item.id === proposal.vaultId);
+    if (vault.id !== proposal.vaultId || !currentVault) {
+      throw new Error('Wechsle zum ursprünglichen Vault, um den Vorschlag zu speichern.');
+    }
+    validateChatCreation(currentVault, proposal);
+    const now = Date.now();
+    const counts = new Map();
+    for (const note of currentVault.notes) {
+      const folder = parentPath(note.path);
+      counts.set(folder, (counts.get(folder) || 0) + 1);
+    }
+    const notes = proposal.notes.map(note => {
+      const folder = parentPath(note.path);
+      const order = counts.get(folder) || 0;
+      counts.set(folder, order + 1);
+      return { ...note, created: now, updated: now, order };
+    });
+    const withFolders = current => [...new Set([...(current.folders || []), ...proposal.folders])];
+    if (!auth.user) {
+      updateVault(current => ({
+        ...current,
+        folders: withFolders(current),
+        notes: [...current.notes, ...notes.filter(note => !current.notes.some(existing => existing.id === note.id))],
+      }));
+      return;
+    }
+
+    const fs = auth.firestoreSdk;
+    if (!cloudReady || !auth.db || !fs) throw new Error('Warte auf die Verbindung zu Firebase und versuche es erneut.');
+    if (syncInFlight.current) throw new Error('Der Vault wird gerade synchronisiert. Versuche es gleich erneut.');
+    const vaultRef = fs.doc(auth.db, 'users', auth.user.uid, 'vaults', proposal.vaultId);
+    const notesRef = fs.collection(vaultRef, 'notes');
+    const paths = [...new Set([...proposal.folders, ...notes.map(note => note.path)])];
+    const refs = notes.map(note => fs.doc(notesRef, note.id));
+    syncInFlight.current = true;
+    try {
+      const before = await fs.getDocFromServer(vaultRef);
+      if (!before.exists()) throw new Error('Der Vault ist nicht mehr vorhanden.');
+      const revision = before.data().updatedAt;
+      const pathsInUse = await fs.getDocsFromServer(fs.query(notesRef, fs.where('path', 'in', paths)));
+
+      await fs.runTransaction(auth.db, async transaction => {
+        const [remoteVault, ...existing] = await Promise.all([
+          transaction.get(vaultRef), ...refs.map(ref => transaction.get(ref)),
+        ]);
+        if (!remoteVault.exists() || remoteVault.data().updatedAt !== revision) {
+          throw new Error('Der Vault wurde gerade geändert. Versuche es erneut.');
+        }
+        const metadata = remoteVault.data();
+        const remoteFiles = pathsInUse.docs.map(snapshot => ({ ...snapshot.data(), id: snapshot.id }));
+        validateChatCreation({ ...metadata, notes: remoteFiles }, proposal);
+        for (const [index, note] of notes.entries()) {
+          if (existing[index].exists()) {
+            const previous = existing[index].data();
+            if (previous.path !== note.path || previous.title !== note.title || previous.body !== note.body) {
+              throw new Error(`„${note.path}“ ist bereits belegt.`);
+            }
+          } else {
+            transaction.set(refs[index], { ...note, updatedAt: now });
+          }
+        }
+        transaction.update(vaultRef, { folders: withFolders(metadata), updatedAt: Math.max(now, (revision || 0) + 1) });
+      });
+      if (proposal.folders.length) {
+        updateVault(current => ({ ...current, folders: withFolders(current) }));
+      }
+    } finally {
+      syncInFlight.current = false;
+      if (syncPending.current) {
+        syncPending.current = false;
+        setSyncWake(value => value + 1);
+      }
+    }
+  }
+  async function applyChatProposal(proposal) {
+    if (saveLockRef.current) throw new Error('Warte, bis die laufende Änderung gespeichert ist.');
+    if (proposal.kind === 'create') await createChatItems(proposal);
+    else await applyChatEdit(proposal.target, proposal.markdown);
   }
   function createNote(inFolder = '') {
     if (saveLockRef.current) return;
@@ -749,7 +875,7 @@ function Workspace() {
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` }} onPointerDown={event => { if (!saveLockRef.current && mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); beginSaveBarrier(); setMode('read'); } }}>
-    <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setChatOpen(false); setActivePdf(null); setActiveId(null); setTabs([]); }}><BrandMark/></Link><button className={`rail-button${!chatOpen ? ' active' : ''}`} title="Dateien" onClick={() => { setChatOpen(false); setSidebarOpen(open => !open); }}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className={`rail-button${chatOpen ? ' active' : ''}`} title="Wissenschat" aria-label="Wissenschat öffnen" onClick={() => { if (mode === 'edit' && activeNote) { commitTitle(); beginSaveBarrier(); setMode('read'); } setChatOpen(true); }}><MessageCircle size={17}/></button><button className="rail-button" title="Graph" onClick={() => { setChatOpen(false); setGraphOpen(true); }}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
+    <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setChatOpen(false); setActivePdf(null); setActiveId(null); setTabs([]); }}><BrandMark/></Link><button className={`rail-button${!chatOpen ? ' active' : ''}`} title="Dateien" onClick={() => { setChatOpen(false); setSidebarOpen(open => !open); }}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className={`rail-button${chatOpen ? ' active' : ''}`} title="Wissenschat" aria-label="Wissenschat" aria-pressed={chatOpen} onClick={() => setChatOpen(value => !value)}><MessageCircle size={17}/></button><button className="rail-button" title="Graph" onClick={() => { setChatOpen(false); setGraphOpen(true); }}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
     <aside className="sidebar">
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span>
         <DropdownMenu.Root><DropdownMenu.Trigger asChild><button type="button" className="workspace-select-button" aria-label="Vault auswählen"><span>{vault.name}</span><ChevronDown size={15}/></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="workspace-menu" align="start" sideOffset={6}>
@@ -761,7 +887,7 @@ function Workspace() {
           {db.vaults.length <= 1 && <div className="workspace-menu-hint">Zum Löschen zuerst einen weiteren Vault anlegen.</div>}
         </DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root>
       </div><button className="icon-button" aria-label="Neuen Vault erstellen" title="Neuen Vault erstellen" onClick={() => { setField(''); setDialog('vault'); }}><Plus size={19}/></button></div>
-      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onRenameFolder={renameFolder} onDeleteFolder={deleteFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote} onReorderFolder={reorderFolder} onImportAttachments={importAttachments} onOpenAttachment={openAttachment} onMoveAttachment={moveAttachment} onRenameAttachment={renameAttachment} onDeleteAttachment={deleteAttachment}/>
+      <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onEditWithAI={openNoteWithAI} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onRenameFolder={renameFolder} onDeleteFolder={deleteFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote} onReorderFolder={reorderFolder} onImportAttachments={importAttachments} onOpenAttachment={openAttachment} onMoveAttachment={moveAttachment} onRenameAttachment={renameAttachment} onDeleteAttachment={deleteAttachment}/>
       <div className="sidebar-status"><span className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/><span>{auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span></div>
     </aside>
     <div className="sidebar-resizer" role="separator" aria-label="Breite der Seitenleiste ändern" aria-orientation="vertical" aria-valuemin={190} aria-valuemax={480} aria-valuenow={sidebarWidth} tabIndex={0}
@@ -771,17 +897,49 @@ function Workspace() {
       onPointerCancel={() => { sidebarResizing.current = false; }}
       onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setSidebarWidth(width => Math.max(190, Math.min(480, width + (event.key === 'ArrowRight' ? 12 : -12)))); } }}/>
     <main className="main-area">
-      <header className="topbar"><div className="breadcrumbs"><span>{vault.name}</span><span className="crumb-sep">/</span><strong>{chatOpen ? 'Wissenschat' : activeNote?.title || activePdf?.name || 'Willkommen'}</strong></div><div className="topbar-actions"><button className="button button-ghost top-action" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={16}/><span>Suchen</span><kbd>⌘ K</kbd></button>{!chatOpen && <button className="button button-outline top-action" onClick={exportVault}><Share2 size={15}/> Exportieren</button>}</div></header>
+      <header className="topbar">
+        <div className="breadcrumbs">
+          <span>{vault.name}</span><span className="crumb-sep">/</span>
+          <strong>{standaloneChat ? 'Wissenschat' : activeNote?.title || activePdf?.name || 'Willkommen'}</strong>
+        </div>
+        <div className="topbar-actions">
+          <button className="button button-ghost top-action" onClick={() => { setSearchText(''); setSearchOpen(true); }}>
+            <Search size={16}/><span>Suchen</span><kbd>⌘ K</kbd>
+          </button>
+          {(activeNote || activePdf) && <button className="button button-outline top-action" type="button"
+            aria-label="Wissenschat am Dokument" title="Wissenschat am Dokument" aria-pressed={chatOpen}
+            onClick={() => setChatOpen(value => !value)}>
+            <MessageCircle size={15}/><span>Wissenschat</span>
+          </button>}
+          {!standaloneChat && <button className="button button-outline top-action" onClick={exportVault}>
+            <Share2 size={15}/> Exportieren
+          </button>}
+        </div>
+      </header>
       <div className="tabs">{tabs.map(id => { const pdf = id.startsWith('pdf:') ? (vault.attachments || []).find(file => file.id === id.slice(4)) : null; const note = pdf ? null : vault.notes.find(item => item.id === id); const label = pdf?.name || note?.title; return label && <button key={id} className={`tab${(pdf ? activePdf?.id === pdf.id : activeId === id) ? ' active' : ''}`} onClick={() => activateTab(id)}><FileText size={14}/><span>{label}</span><span role="button" aria-label="Tab schließen" className="tab-close" onClick={event => { event.stopPropagation(); closeTab(id); }}>×</span></button>; })}</div>
-      <div className={`content-wrap${detailsCollapsed ? ' details-collapsed' : ''}${chatOpen ? ' chat-content-wrap' : ''}`}>
-        <section className="editor-pane" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }}>
-          {chatOpen ? <KnowledgeChat vault={vault} currentNote={activeNote} onOpenSource={id => { setChatOpen(false); openNote(id); }}/>: activePdf ? <div className="pdf-view"><div className="pdf-view-heading"><FileText size={17}/><span>{activePdf.path}</span><a className="button button-outline" href={activePdf.url} download={activePdf.name}>PDF herunterladen</a></div><iframe title={activePdf.name} src={activePdf.url} className="pdf-frame"/></div> : !activeNote ? <div className="welcome-view"><p className="eyebrow">DEINE DIGITALEN NOTIZEN</p><h1>Hallo <em>{(profileGreeting || auth.user?.displayName || 'Manuel').trim().split(/\s+/)[0]}.</em></h1><p className="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p><div className="welcome-actions"><button className="button button-primary" onClick={createNote}><FilePlus2 size={16}/> Erste Notiz schreiben</button><button className="button button-outline" onClick={() => setDialog('import')}><Download size={15}/> Vault importieren</button></div><div className="welcome-divider"/><div className="recent-head"><div><p className="eyebrow">LOS GEHT’S</p><h2>Dein Arbeitsbereich</h2></div><span className="local-badge"><i/> {auth.user ? cloudReady ? 'Mit Cloud synchronisiert' : cloudStatus : 'Lokal zwischengespeichert'}</span></div><div className="start-grid"><button className="start-card" onClick={createNote}><FilePlus2 size={18}/><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small></button><button className="start-card" onClick={() => { setChatOpen(true); }}><MessageCircle size={18}/><strong>Mit deinem Wissen chatten</strong><small>Fragen über alle Notizen stellen</small></button><button className="start-card" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={18}/><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small></button></div></div> : <article className="note-view" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }} onDrop={dropInEditor} onClick={event => { if (mode === 'read' && !event.target.closest('button,a,input')) setMode('edit'); }}>
+      <div className={`content-wrap${detailsCollapsed ? ' details-collapsed' : ''}${standaloneChat ? ' chat-content-wrap' : chatBesideDocument ? ' chat-side-wrap' : ''}`}>
+        <section className="editor-pane" hidden={standaloneChat} onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }}>
+          {activePdf ? <div className="pdf-view"><div className="pdf-view-heading"><FileText size={17}/><span>{activePdf.path}</span><a className="button button-outline" href={activePdf.url} download={activePdf.name}>PDF herunterladen</a></div><iframe title={activePdf.name} src={activePdf.url} className="pdf-frame"/></div> : !activeNote ? <div className="welcome-view"><p className="eyebrow">DEINE DIGITALEN NOTIZEN</p><h1>Hallo <em>{(profileGreeting || auth.user?.displayName || 'Manuel').trim().split(/\s+/)[0]}.</em></h1><p className="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p><div className="welcome-actions"><button className="button button-primary" onClick={createNote}><FilePlus2 size={16}/> Erste Notiz schreiben</button><button className="button button-outline" onClick={() => setDialog('import')}><Download size={15}/> Vault importieren</button></div><div className="welcome-divider"/><div className="recent-head"><div><p className="eyebrow">LOS GEHT’S</p><h2>Dein Arbeitsbereich</h2></div><span className="local-badge"><i/> {auth.user ? cloudReady ? 'Mit Cloud synchronisiert' : cloudStatus : 'Lokal zwischengespeichert'}</span></div><div className="start-grid"><button className="start-card" onClick={createNote}><FilePlus2 size={18}/><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small></button><button className="start-card" onClick={() => { setChatOpen(true); }}><MessageCircle size={18}/><strong>Mit deinem Wissen chatten</strong><small>Fragen über alle Notizen stellen</small></button><button className="start-card" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={18}/><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small></button></div></div> : <article className="note-view" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }} onDrop={dropInEditor} onClick={event => { if (mode === 'read' && !event.target.closest('button,a,input')) setMode('edit'); }}>
             <div className="note-heading"><div className="note-meta">{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'long',year:'numeric'}).format(new Date(activeNote.updated))}<span>·</span>{wordCount} Wörter</div><div className="note-actions"><button className="button button-ghost mode-toggle" onClick={toggleNoteMode}>{mode === 'edit' ? 'Vorschau' : 'Bearbeiten'}</button><button className="icon-button" title="Umbenennen" onClick={() => { if (mode === 'edit') noteInputRef.current?.focus(); else { focusTitleRef.current = true; setMode('edit'); } }}><Pencil size={15}/></button><button className="icon-button" title="Markdown exportieren" onClick={() => exportNote(activeNote)}><Download size={15}/></button></div></div>
             {mode === 'edit' ? <><input ref={noteInputRef} className="note-title-input read-title" value={title} onChange={event => setTitle(event.target.value)} onBlur={commitTitle} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitTitle(); event.currentTarget.blur(); } }}/><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><textarea ref={editorRef} className="markdown-editor" value={body} onChange={event => updateBody(event.target.value)} placeholder={'Schreib deinen Gedanken auf …\n\nTipp: Nutze #tags und [[Wikilinks]].'}/></> : <><h1 className="read-title">{activeNote.title}</h1><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><div onClick={event => { if (!event.target.closest('input,a')) setMode('edit'); }}><MarkdownPreview source={body} onWiki={resolveWiki} onToggleTask={toggleTask}/></div></>}
             <div className="editor-footer"><span><i className="status-dot"/> Alle Änderungen gespeichert</span><span>Markdown · UTF-8</span></div>
           </article>}
         </section>
-        <aside className={`right-sidebar${detailsCollapsed ? ' collapsed' : ''}`}><div className="right-head">{!detailsCollapsed && <><span>{activePdf ? 'PDF-DETAILS' : 'NOTIZ-DETAILS'}</span><CircleHelp size={15}/></>}<button className="icon-button details-toggle" type="button" title={detailsCollapsed ? 'Details einblenden' : 'Details einklappen'} aria-label={detailsCollapsed ? 'Details einblenden' : 'Details einklappen'} aria-expanded={!detailsCollapsed} onClick={() => setDetailsCollapsed(value => !value)}>{detailsCollapsed ? <ChevronLeft size={15}/> : <ChevronRight size={15}/>}</button></div>{!detailsCollapsed && (activeNote ? <><div className="detail-section"><span>BACKLINKS</span>{backlinks.length ? backlinks.map(note => <button key={note.id} className="detail-link" onClick={() => openNote(note.id)}>{note.title}</button>) : <p>Noch keine Rückverweise</p>}</div><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activeNote.path}</p></div><div className="detail-section"><span>WORTANZAHL</span><p>{wordCount} Wörter</p></div></> : activePdf ? <><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activePdf.path}</p></div><div className="detail-section"><span>DATEIGRÖSSE</span><p>{(activePdf.size / 1024 / 1024).toFixed(2)} MB</p></div></> : <div className="right-empty"><div className="detail-orbit">✳</div><strong>Alles an seinem Platz</strong><p>Öffne eine Notiz, um ihre Details und Verbindungen zu sehen.</p></div>)}</aside>
+        {!chatOpen && <aside className={`right-sidebar${detailsCollapsed ? ' collapsed' : ''}`}><div className="right-head">{!detailsCollapsed && <><span>{activePdf ? 'PDF-DETAILS' : 'NOTIZ-DETAILS'}</span><CircleHelp size={15}/></>}<button className="icon-button details-toggle" type="button" title={detailsCollapsed ? 'Details einblenden' : 'Details einklappen'} aria-label={detailsCollapsed ? 'Details einblenden' : 'Details einklappen'} aria-expanded={!detailsCollapsed} onClick={() => setDetailsCollapsed(value => !value)}>{detailsCollapsed ? <ChevronLeft size={15}/> : <ChevronRight size={15}/>}</button></div>{!detailsCollapsed && (activeNote ? <><div className="detail-section"><span>BACKLINKS</span>{backlinks.length ? backlinks.map(note => <button key={note.id} className="detail-link" onClick={() => openNote(note.id)}>{note.title}</button>) : <p>Noch keine Rückverweise</p>}</div><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activeNote.path}</p></div><div className="detail-section"><span>WORTANZAHL</span><p>{wordCount} Wörter</p></div></> : activePdf ? <><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activePdf.path}</p></div><div className="detail-section"><span>DATEIGRÖSSE</span><p>{(activePdf.size / 1024 / 1024).toFixed(2)} MB</p></div></> : <div className="right-empty"><div className="detail-orbit">✳</div><strong>Alles an seinem Platz</strong><p>Öffne eine Notiz, um ihre Details und Verbindungen zu sehen.</p></div>)}</aside>}
+        <div className="knowledge-chat-pane" hidden={!chatOpen}>
+          <KnowledgeChat
+            key={vault.id}
+            vault={vault}
+            currentNote={activeNote}
+            open={chatOpen}
+            compact={chatBesideDocument}
+            editingNote={activeNote?.id === chatEditNoteId ? activeNote : null}
+            onEditModeChange={enabled => setChatEditNoteId(enabled ? activeNote?.id : null)}
+            onOpenSource={openNote}
+            onApplyProposal={applyChatProposal}
+            onClose={() => setChatOpen(false)}
+          />
+        </div>
       </div>
       <footer className="statusbar"><span><i className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/> {auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span><span>{activeNote ? `${activeNote.title} · ${auth.user && cloudReady ? 'Cloud' : 'lokal'}` : activePdf?.name || 'Willkommen in atelier'}</span><span>{activePdf ? 'PDF · Firebase Storage' : 'Markdown · UTF-8'}</span></footer>
     </main>

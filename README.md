@@ -40,7 +40,25 @@ npm run desktop:build:mac       # macOS .app und .dmg, auf macOS
 npm run desktop:build:windows   # Windows .msi und NSIS .exe, auf Windows
 ```
 
-Voraussetzung sind `npm install`, Rust/Cargo und die plattformspezifischen Build-Werkzeuge. Der Build erzeugt die macOS-/Windows-Icons aus `public/icon.svg`. Dieses Mac-System hat Xcode, aber kein Rust/Cargo und keine verwendbare Java-Runtime; ein Windows-Runner ist hier nicht verfügbar. Deshalb wurden keine Installer gebaut, installiert oder getestet. Tauri empfiehlt, die Plattformicons mit `tauri icon` zu erzeugen; die jeweiligen Installer werden auf macOS bzw. Windows gebaut.
+Voraussetzung sind `npm install`, Rust/Cargo und die plattformspezifischen Build-Werkzeuge. Der Build erzeugt die macOS-/Windows-Icons aus `public/icon.svg`. Die jeweiligen Installer werden auf macOS bzw. Windows gebaut.
+
+### Wissenschat ohne Release testen
+
+Für den schnellen Test im Browser mit Beispielnotizen auf macOS:
+
+```sh
+npm run dev:chat
+```
+
+Öffne `http://127.0.0.1:4192` und den Wissenschat. Schreib zum Beispiel „Erstelle den Ordner ‹Privat› und darin die Notizen ‹Wellness› und ‹Training›“ oder „Ergänze die Notiz ‹Willkommen in atelier› um einen Abschnitt“. Enter sendet die Nachricht, Umschalt+Enter erzeugt einen Zeilenumbruch. Mit „Vorschau“ kannst du den Vorschlag ansehen, mit „Übernehmen“ speichern und mit „Verwerfen“ ablehnen. Dieser Modus simuliert KI-Antworten, speichert Änderungen lokal im Browser und sendet keine Anfragen an Firebase oder OpenAI.
+
+Für echte Antworten mit deinem ChatGPT-Abo installiere einmal Rust/Cargo und starte die Desktop-App mit lokalen Notizen:
+
+```sh
+VITE_CLOUD_ENABLED=false npm run desktop:dev
+```
+
+Die Desktop-Entwicklung nutzt Port 4193. Der normale Browser-Server auf Port 4178 und die Chatvorschau auf Port 4192 können parallel laufen. Verbinde ChatGPT im Wissenschat, falls die Desktop-App danach fragt. Vite übernimmt Änderungen an der Oberfläche direkt. Tauri baut die Desktop-App bei Änderungen am Rust-Code lokal neu. Für beide Schritte brauchst du kein GitHub Release.
 
 ### Installer über GitHub Releases
 

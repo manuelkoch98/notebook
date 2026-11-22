@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 4178 --strictPort",
+    "dev:chat": "vite --mode chat-preview --port 4192",
+    "dev:desktop": "vite --mode desktop-dev --port 4193",
     "predev": "node scripts/write-firebase-config.mjs",
     "build": "node scripts/build.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4178 --strictPort",

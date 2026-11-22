@@ -73,8 +73,8 @@ export default function MarkdownPreview({ source, onWiki, onToggleTask }) {
           }
           if (/^\d/.test(match[2]) !== ordered) break;
           const sourceLine = index; const task = match[3].match(/^\[([ xX])\]\s+(.*)$/); const children = [];
-          if (task) children.push(<><input type="checkbox" checked={task[1].trim().length > 0} aria-label={task[2]} onChange={() => onToggleTask?.(sourceLine)}/><span>{inline(task[2], onWiki)}</span></>);
-          else children.push(inline(match[3], onWiki));
+          if (task) children.push(<Fragment key={`task-${sourceLine}`}><input type="checkbox" checked={task[1].trim().length > 0} aria-label={task[2]} onChange={() => onToggleTask?.(sourceLine)}/><span>{inline(task[2], onWiki)}</span></Fragment>);
+          else children.push(...inline(match[3], onWiki));
           items.push({ task: Boolean(task), children }); index += 1;
           if (index < end && isList(lines[index])?.[1].length > indent) {
             const nestedStart = index; while (index < end && isList(lines[index])?.[1].length > indent) index += 1;

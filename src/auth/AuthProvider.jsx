@@ -13,15 +13,17 @@ export function AuthProvider({ children }) {
     Promise.all([
       import('https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js'),
       import('https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js'),
-      import('https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js')
-    ]).then(([appSdk, sdk, firestoreSdk]) => {
+      import('https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js'),
+      import('https://www.gstatic.com/firebasejs/13.4.0/firebase-storage.js')
+    ]).then(([appSdk, sdk, firestoreSdk, storageSdk]) => {
       if (disposed) return;
       const app = appSdk.initializeApp(config.config);
       const auth = sdk.getAuth(app);
+      const storage = storageSdk.getStorage(app);
       let db;
       try { db = firestoreSdk.initializeFirestore(app, { localCache: firestoreSdk.persistentLocalCache({ tabManager: firestoreSdk.persistentMultipleTabManager() }) }); }
       catch { db = firestoreSdk.getFirestore(app); }
-      setAuthState(current => ({ ...current, auth, sdk, db, firestoreSdk }));
+      setAuthState(current => ({ ...current, auth, sdk, db, firestoreSdk, storage, storageSdk }));
       unsubscribe = sdk.onAuthStateChanged(auth, user => setAuthState(current => ({ ...current, loading: false, user })));
     }).catch(() => setAuthState(current => ({ ...current, loading: false, error: 'Firebase konnte nicht geladen werden. Prüfe die Verbindung und Konfiguration.' })));
     return () => { disposed = true; unsubscribe?.(); };

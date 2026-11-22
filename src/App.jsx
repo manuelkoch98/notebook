@@ -201,32 +201,39 @@ function Workspace() {
     const readyVaults = new Set();
     let latestVaultDocs = [];
     let initializing = false;
+    let rootServerReady = false;
+    setCloudReady(false);
 
     const applyCloudSnapshot = (vaultDocs) => {
-      if (cancelled || !vaultDocs.length || vaultDocs.some(item => !readyVaults.has(item.id))) return;
+      if (cancelled || !rootServerReady || vaultDocs.some(item => !readyVaults.has(item.id))) return;
       const cloudVaults = vaultDocs.map(item => {
         const local = dbRef.current.vaults.find(vault => vault.id === item.id);
         const remoteNotes = noteSnapshots.get(item.id) || [];
-        const notes = remoteNotes.map(note => {
+        const deletedNoteIds = new Set(local?.deletedNoteIds || []);
+        const notes = remoteNotes.filter(note => !deletedNoteIds.has(note.id)).map(note => {
           const localNote = local?.notes.find(candidate => candidate.id === note.id);
           const dirty = localNote && localNote.baseUpdatedAt !== undefined && (localNote.body !== localNote.baseBody || localNote.title !== localNote.baseTitle || localNote.path !== localNote.basePath || localNote.order !== localNote.baseOrder);
           return dirty ? localNote : { ...note, baseUpdatedAt: note.updatedAt, baseBody: note.body, baseTitle: note.title, basePath: note.path, baseOrder: note.order };
         });
         const remoteIds = new Set(remoteNotes.map(note => note.id));
         const pendingLocal = (local?.notes || []).filter(note => !remoteIds.has(note.id) && (note.baseUpdatedAt === undefined || note.body !== note.baseBody || note.title !== note.baseTitle || note.path !== note.basePath || note.order !== note.baseOrder));
-        return { id: item.id, name: item.data.name || 'Mein Wissensgarten', folders: item.data.folders || [], attachments: item.data.attachments || [], notes: [...notes, ...pendingLocal] };
+        return { id: item.id, name: item.data.name || 'Mein Wissensgarten', folders: item.data.folders || [], attachments: item.data.attachments || [], deletedNoteIds: [...deletedNoteIds], notes: [...notes, ...pendingLocal] };
       });
       if (cloudVaults.length) {
         setDb(current => JSON.stringify(current) === JSON.stringify({ vaults: cloudVaults }) ? current : { vaults: cloudVaults });
         setVaultId(current => cloudVaults.some(item => item.id === current) ? current : cloudVaults[0].id);
         setCloudReady(true);
         setCloudStatus('Mit Cloud synchronisiert');
+      } else {
+        setCloudReady(true);
+        setCloudStatus('Mit Cloud synchronisiert');
       }
     };
 
-    rootUnsubscribe = fs.onSnapshot(root, async snapshot => {
+    rootUnsubscribe = fs.onSnapshot(root, { includeMetadataChanges: true }, async snapshot => {
       if (cancelled) return;
-      if (snapshot.empty && !initializing) {
+      rootServerReady = !snapshot.metadata.fromCache;
+      if (snapshot.empty && rootServerReady && !initializing) {
         initializing = true;
         try {
           await Promise.all(db.vaults.map(async item => {
@@ -244,13 +251,13 @@ function Workspace() {
       for (const [id, unsubscribe] of noteUnsubscribes) if (!currentIds.has(id)) { unsubscribe(); noteUnsubscribes.delete(id); readyVaults.delete(id); noteSnapshots.delete(id); }
       for (const item of docs) if (!noteUnsubscribes.has(item.id)) {
         const notesRef = fs.collection(root, item.id, 'notes');
-        noteUnsubscribes.set(item.id, fs.onSnapshot(notesRef, notes => {
+        noteUnsubscribes.set(item.id, fs.onSnapshot(notesRef, { includeMetadataChanges: true }, notes => {
           noteSnapshots.set(item.id, notes.docs.map(note => ({ id: note.id, ...note.data(), baseUpdatedAt: note.data().updatedAt, baseBody: note.data().body, baseTitle: note.data().title, basePath: note.data().path, baseOrder: note.data().order })));
-          readyVaults.add(item.id);
+          if (!notes.metadata.fromCache) readyVaults.add(item.id);
           applyCloudSnapshot(latestVaultDocs);
         }, () => setCloudStatus('Firebase konnte Notizen nicht laden')));
       }
-      if (!docs.length && initializing) { setCloudReady(true); }
+      applyCloudSnapshot(docs);
     }, () => { if (!cancelled) setCloudStatus('Firebase-Verbindung fehlgeschlagen'); });
 
     return () => { cancelled = true; rootUnsubscribe?.(); noteUnsubscribes.forEach(unsubscribe => unsubscribe()); };
@@ -281,10 +288,10 @@ function Workspace() {
               await fs.setDoc(vaultRef, { ...metadata, updatedAt: Date.now() }, { merge: true });
           }
           const notesRef = fs.collection(vaultRef, 'notes');
-          if (!saveOnly) {
-            const remote = await fs.getDocs(notesRef);
-            const localIds = new Set(item.notes.map(note => note.id));
-            await Promise.all(remote.docs.filter(note => !localIds.has(note.id)).map(note => fs.deleteDoc(note.ref)));
+          const deletedNoteIds = item.deletedNoteIds || [];
+          if (!saveOnly && deletedNoteIds.length) {
+            await Promise.all(deletedNoteIds.map(id => fs.deleteDoc(fs.doc(notesRef, id))));
+            setDb(current => ({ vaults: current.vaults.map(vault => vault.id === item.id ? { ...vault, deletedNoteIds: (vault.deletedNoteIds || []).filter(id => !deletedNoteIds.includes(id)) } : vault) }));
           }
           const normalized = note => ({ id: note.id, title: note.title, path: note.path, body: note.body, created: note.created, updated: note.updated, ...(Number.isFinite(note.order) ? { order: note.order } : {}) });
           for (const note of item.notes) {
@@ -442,7 +449,7 @@ function Workspace() {
     if (saveLockRef.current) return;
     const note = vault.notes.find(item => item.id === id); if (!note) return;
     requestConfirmation({ title: 'Notiz löschen?', description: `„${note.title}“ wird dauerhaft gelöscht.`, confirmLabel: 'Notiz löschen', danger: true, onConfirm: () => {
-      updateVault(current => ({ ...current, notes: current.notes.filter(item => item.id !== id) }));
+      updateVault(current => ({ ...current, notes: current.notes.filter(item => item.id !== id), deletedNoteIds: [...new Set([...(current.deletedNoteIds || []), id])] }));
       setTabs(current => current.filter(item => item !== id));
       if (activeId === id) { setActiveId(null); setTitle(''); setBody(''); }
       setConfirmation(null); notify('Notiz gelöscht');
@@ -534,7 +541,7 @@ function Workspace() {
       const removedAttachments = (vault.attachments || []).filter(file => file.path.startsWith(`${folder}/`));
       setCollapsed(current => new Set([...current].filter(path => path !== folder && !path.startsWith(`${folder}/`))));
       if (auth.storage && auth.storageSdk) removedAttachments.forEach(file => auth.storageSdk.deleteObject(auth.storageSdk.ref(auth.storage, file.storagePath)).catch(() => {}));
-      updateVault(current => ({ ...current, folders: current.folders.filter(item => !childFolders.includes(item)), notes: current.notes.filter(note => !removedIds.has(note.id)), attachments: (current.attachments || []).filter(file => !removedAttachments.some(removed => removed.id === file.id)) }));
+      updateVault(current => ({ ...current, folders: current.folders.filter(item => !childFolders.includes(item)), notes: current.notes.filter(note => !removedIds.has(note.id)), deletedNoteIds: [...new Set([...(current.deletedNoteIds || []), ...removedIds])], attachments: (current.attachments || []).filter(file => !removedAttachments.some(removed => removed.id === file.id)) }));
       setTabs(current => current.filter(id => !removedIds.has(id) && !removedAttachments.some(file => id === `pdf:${file.id}`)));
       if (activePdf && removedAttachments.some(file => file.id === activePdf.id)) { const next = tabs.filter(id => !removedIds.has(id) && !removedAttachments.some(file => id === `pdf:${file.id}`)).at(-1); if (next) activateTab(next); else setActivePdf(null); }
       if (activeId && removedIds.has(activeId)) { setActiveId(null); setTitle(''); setBody(''); }

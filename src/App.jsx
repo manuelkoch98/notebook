@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Check, ChevronDown, Command, FilePlus2, FileText, Search, Share2, PanelLeft, Plus, Network, Pencil, Trash2, Download, CircleHelp } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Command, FilePlus2, FileText, Search, Share2, PanelLeft, Plus, Network, Pencil, Trash2, Download, CircleHelp, MessageCircle } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider.jsx';
 import FileTree from './components/FileTree.jsx';
 import LoginPage from './components/LoginPage.jsx';
@@ -10,6 +10,7 @@ import ProfileMenu from './components/ProfileMenu.jsx';
 import BrandMark from './components/BrandMark.jsx';
 import DialogFrame from './components/ui/DialogFrame.jsx';
 import ConfirmDialog from './components/ui/ConfirmDialog.jsx';
+import KnowledgeChat from './components/KnowledgeChat.jsx';
 
 const DB_KEY = 'atelier-db-v1';
 const freshVault = () => ({ id: 'main', name: 'Mein Wissensgarten', folders: ['Ideen', 'Notizen'], notes: [
@@ -35,6 +36,78 @@ const nextNoteOrder = notes => sortNotes(notes).length;
 function loadCollapsedFolders(key) {
   try { const value = JSON.parse(localStorage.getItem(key) || '[]'); return new Set(Array.isArray(value) ? value : []); }
   catch { return new Set(); }
+}
+
+function buildKnowledgeGraph(notes) {
+  const byName = new Map();
+  notes.forEach(note => {
+    byName.set(note.title.toLocaleLowerCase(), note.id);
+    byName.set(note.path.replace(/\.md$/i, '').toLocaleLowerCase(), note.id);
+  });
+  const edges = [];
+  const seen = new Set();
+  notes.forEach(note => {
+    for (const match of note.body.matchAll(/\[\[([^\]]+)\]\]/g)) {
+      const target = match[1].split('|')[0].split('#')[0].trim().toLocaleLowerCase();
+      const targetId = byName.get(target);
+      if (!targetId || targetId === note.id) continue;
+      const key = [note.id, targetId].sort().join('<->');
+      if (!seen.has(key)) { seen.add(key); edges.push({ source: note.id, target: targetId }); }
+    }
+  });
+
+  const width = 1000; const height = 620; const center = { x: width / 2, y: height / 2 };
+  const nodes = notes.map((note, index) => {
+    const angle = index * Math.PI * (3 - Math.sqrt(5));
+    const radius = 70 + 190 * Math.sqrt((index + 0.5) / Math.max(notes.length, 1));
+    const labelLength = Math.min(note.title.length, 24);
+    return { ...note, nodeWidth: Math.max(112, Math.min(220, labelLength * 7.3 + 30)), x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
+  });
+  const positions = new Map(nodes.map(node => [node.id, node]));
+  for (let iteration = 0; iteration < 140; iteration += 1) {
+    const forces = new Map(nodes.map(node => [node.id, { x: (center.x - node.x) * 0.002, y: (center.y - node.y) * 0.002 }]));
+    for (let i = 0; i < nodes.length; i += 1) for (let j = i + 1; j < nodes.length; j += 1) {
+      const a = nodes[i]; const b = nodes[j]; const dx = b.x - a.x; const dy = b.y - a.y;
+      const distance = Math.max(1, Math.hypot(dx, dy)); const force = Math.max(0, (a.nodeWidth + b.nodeWidth) / 2 + 14 - distance) * 0.035;
+      const fx = dx / distance * force; const fy = dy / distance * force;
+      forces.get(a.id).x -= fx; forces.get(a.id).y -= fy; forces.get(b.id).x += fx; forces.get(b.id).y += fy;
+    }
+    for (const edge of edges) {
+      const a = positions.get(edge.source); const b = positions.get(edge.target); if (!a || !b) continue;
+      const dx = b.x - a.x; const dy = b.y - a.y; const distance = Math.max(1, Math.hypot(dx, dy));
+      const force = (distance - (a.nodeWidth + b.nodeWidth) / 2 - 28) * 0.003;
+      const fx = dx / distance * force; const fy = dy / distance * force;
+      forces.get(a.id).x += fx; forces.get(a.id).y += fy; forces.get(b.id).x -= fx; forces.get(b.id).y -= fy;
+    }
+    for (const node of nodes) {
+      const force = forces.get(node.id);
+      node.x = Math.max(105, Math.min(width - 105, node.x + force.x));
+      node.y = Math.max(36, Math.min(height - 36, node.y + force.y));
+    }
+  }
+  return { nodes, edges, width, height };
+}
+
+function KnowledgeGraph({ notes, activeId, onOpen }) {
+  const graph = useMemo(() => buildKnowledgeGraph(notes), [notes]);
+  const positions = new Map(graph.nodes.map(node => [node.id, node]));
+  return <div className="knowledge-graph">
+    <svg viewBox={`0 0 ${graph.width} ${graph.height}`} role="img" aria-label={`Wissensgraph mit ${graph.nodes.length} Notizen und ${graph.edges.length} Verbindungen`}>
+      <g className="graph-edges">{graph.edges.map(edge => { const source = positions.get(edge.source); const target = positions.get(edge.target); return <line key={`${edge.source}-${edge.target}`} x1={source.x} y1={source.y} x2={target.x} y2={target.y}/>; })}</g>
+      <g className="graph-nodes">{graph.nodes.map(node => {
+        const degree = graph.edges.filter(edge => edge.source === node.id || edge.target === node.id).length;
+        const label = node.title.length > 24 ? `${node.title.slice(0, 22)}…` : node.title;
+        const nodeWidth = node.nodeWidth;
+        return <g key={node.id} className={`graph-node${node.id === activeId ? ' active' : ''}${degree ? ' connected' : ' isolated'}`} transform={`translate(${node.x} ${node.y})`} role="button" tabIndex={0} aria-label={`Notiz öffnen: ${node.title}`} onClick={() => onOpen(node.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(node.id); } }}>
+          <title>{node.title}{degree ? ` · ${degree} Verbindungen` : ' · keine Verbindungen'}</title>
+          <rect x={-nodeWidth / 2} y="-19" width={nodeWidth} height="38" rx="19"/>
+          <circle className="graph-node-dot" cx={-nodeWidth / 2 + 14} cy="0" r={degree ? 4 : 3}/>
+          <text x="0" y="1">{label}</text>
+        </g>;
+      })}</g>
+    </svg>
+    <div className="graph-legend"><span><i className="graph-legend-link"/> Wikilink-Verbindung</span><span>{graph.nodes.length} Notizen · {graph.edges.length} Verbindungen</span></div>
+  </div>;
 }
 
 function AuthGate({ children }) {
@@ -80,8 +153,10 @@ function Workspace() {
   const [folderParent, setFolderParent] = useState('');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [detailsCollapsed, setDetailsCollapsed] = useState(() => localStorage.getItem('atelier-details-collapsed') === 'true');
   const [sidebarWidth, setSidebarWidth] = useState(() => Math.max(190, Math.min(480, Number(localStorage.getItem('atelier-sidebar-width')) || 256)));
   const [toast, setToast] = useState('');
   const [cloudReady, setCloudReady] = useState(false);
@@ -106,6 +181,7 @@ function Workspace() {
   useEffect(() => { localStorage.setItem(cacheKey, JSON.stringify(db)); }, [cacheKey, db]);
   useEffect(() => { if (collapsedState.key === collapseKey) localStorage.setItem(collapseKey, JSON.stringify([...collapsedState.value])); }, [collapseKey, collapsedState]);
   useEffect(() => { localStorage.setItem('atelier-sidebar-width', String(sidebarWidth)); }, [sidebarWidth]);
+  useEffect(() => { localStorage.setItem('atelier-details-collapsed', String(detailsCollapsed)); }, [detailsCollapsed]);
   useEffect(() => { const update = () => setProfileVersion(value => value + 1); window.addEventListener('atelier-profile-updated', update); return () => window.removeEventListener('atelier-profile-updated', update); }, []);
   useEffect(() => { const refresh = () => setDb(current => ({ ...current, vaults: [...current.vaults] })); window.addEventListener('online', refresh); return () => window.removeEventListener('online', refresh); }, []);
   useEffect(() => { if (activeNote) { setBody(activeNote.body); setTitle(activeNote.title); } }, [activeId, activeNote?.body, activeNote?.title]);
@@ -666,7 +742,7 @@ function Workspace() {
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` }} onPointerDown={event => { if (!saveLockRef.current && mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); beginSaveBarrier(); setMode('read'); } }}>
-    <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setActivePdf(null); setActiveId(null); setTabs([]); }}><BrandMark/></Link><button className="rail-button active" title="Dateien" onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className="rail-button" title="Graph" onClick={() => setGraphOpen(true)}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
+    <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setChatOpen(false); setActivePdf(null); setActiveId(null); setTabs([]); }}><BrandMark/></Link><button className={`rail-button${!chatOpen ? ' active' : ''}`} title="Dateien" onClick={() => { setChatOpen(false); setSidebarOpen(open => !open); }}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className={`rail-button${chatOpen ? ' active' : ''}`} title="Wissenschat" aria-label="Wissenschat öffnen" onClick={() => { if (mode === 'edit' && activeNote) { commitTitle(); beginSaveBarrier(); setMode('read'); } setChatOpen(true); }}><MessageCircle size={17}/></button><button className="rail-button" title="Graph" onClick={() => { setChatOpen(false); setGraphOpen(true); }}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
     <aside className="sidebar">
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span>
         <DropdownMenu.Root><DropdownMenu.Trigger asChild><button type="button" className="workspace-select-button" aria-label="Vault auswählen"><span>{vault.name}</span><ChevronDown size={15}/></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="workspace-menu" align="start" sideOffset={6}>
@@ -688,17 +764,17 @@ function Workspace() {
       onPointerCancel={() => { sidebarResizing.current = false; }}
       onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setSidebarWidth(width => Math.max(190, Math.min(480, width + (event.key === 'ArrowRight' ? 12 : -12)))); } }}/>
     <main className="main-area">
-      <header className="topbar"><div className="breadcrumbs"><span>{vault.name}</span><span className="crumb-sep">/</span><strong>{activeNote?.title || activePdf?.name || 'Willkommen'}</strong></div><div className="topbar-actions"><button className="button button-ghost top-action" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={16}/><span>Suchen</span><kbd>⌘ K</kbd></button><button className="button button-outline top-action" onClick={exportVault}><Share2 size={15}/> Exportieren</button></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>{vault.name}</span><span className="crumb-sep">/</span><strong>{chatOpen ? 'Wissenschat' : activeNote?.title || activePdf?.name || 'Willkommen'}</strong></div><div className="topbar-actions"><button className="button button-ghost top-action" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={16}/><span>Suchen</span><kbd>⌘ K</kbd></button>{!chatOpen && <button className="button button-outline top-action" onClick={exportVault}><Share2 size={15}/> Exportieren</button>}</div></header>
       <div className="tabs">{tabs.map(id => { const pdf = id.startsWith('pdf:') ? (vault.attachments || []).find(file => file.id === id.slice(4)) : null; const note = pdf ? null : vault.notes.find(item => item.id === id); const label = pdf?.name || note?.title; return label && <button key={id} className={`tab${(pdf ? activePdf?.id === pdf.id : activeId === id) ? ' active' : ''}`} onClick={() => activateTab(id)}><FileText size={14}/><span>{label}</span><span role="button" aria-label="Tab schließen" className="tab-close" onClick={event => { event.stopPropagation(); closeTab(id); }}>×</span></button>; })}</div>
-      <div className="content-wrap">
+      <div className={`content-wrap${detailsCollapsed ? ' details-collapsed' : ''}${chatOpen ? ' chat-content-wrap' : ''}`}>
         <section className="editor-pane" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }}>
-          {activePdf ? <div className="pdf-view"><div className="pdf-view-heading"><FileText size={17}/><span>{activePdf.path}</span><a className="button button-outline" href={activePdf.url} download={activePdf.name}>PDF herunterladen</a></div><iframe title={activePdf.name} src={activePdf.url} className="pdf-frame"/></div> : !activeNote ? <div className="welcome-view"><p className="eyebrow">DEINE DIGITALEN NOTIZEN</p><h1>Hallo <em>{(profileGreeting || auth.user?.displayName || 'Manuel').trim().split(/\s+/)[0]}.</em></h1><p className="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p><div className="welcome-actions"><button className="button button-primary" onClick={createNote}><FilePlus2 size={16}/> Erste Notiz schreiben</button><button className="button button-outline" onClick={() => setDialog('import')}><Download size={15}/> Vault importieren</button></div><div className="welcome-divider"/><div className="recent-head"><div><p className="eyebrow">LOS GEHT’S</p><h2>Dein Arbeitsbereich</h2></div><span className="local-badge"><i/> {auth.user ? cloudReady ? 'Mit Cloud synchronisiert' : cloudStatus : 'Lokal zwischengespeichert'}</span></div><div className="start-grid"><button className="start-card" onClick={createNote}><FilePlus2 size={18}/><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small></button><button className="start-card" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Search size={18}/><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small></button><button className="start-card" onClick={() => { setSearchText(''); setSearchOpen(true); }}><Command size={18}/><strong>Schnell navigieren</strong><small>Befehle und Aktionen</small></button></div></div> : <article className="note-view" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }} onDrop={dropInEditor} onClick={event => { if (mode === 'read' && !event.target.closest('button,a,input')) setMode('edit'); }}>
+          {chatOpen ? <KnowledgeChat vault={vault} currentNote={activeNote} onOpenSource={id => { setChatOpen(false); openNote(id); }}/>: activePdf ? <div className="pdf-view"><div className="pdf-view-heading"><FileText size={17}/><span>{activePdf.path}</span><a className="button button-outline" href={activePdf.url} download={activePdf.name}>PDF herunterladen</a></div><iframe title={activePdf.name} src={activePdf.url} className="pdf-frame"/></div> : !activeNote ? <div className="welcome-view"><p className="eyebrow">DEINE DIGITALEN NOTIZEN</p><h1>Hallo <em>{(profileGreeting || auth.user?.displayName || 'Manuel').trim().split(/\s+/)[0]}.</em></h1><p className="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p><div className="welcome-actions"><button className="button button-primary" onClick={createNote}><FilePlus2 size={16}/> Erste Notiz schreiben</button><button className="button button-outline" onClick={() => setDialog('import')}><Download size={15}/> Vault importieren</button></div><div className="welcome-divider"/><div className="recent-head"><div><p className="eyebrow">LOS GEHT’S</p><h2>Dein Arbeitsbereich</h2></div><span className="local-badge"><i/> {auth.user ? cloudReady ? 'Mit Cloud synchronisiert' : cloudStatus : 'Lokal zwischengespeichert'}</span></div><div className="start-grid"><button className="start-card" onClick={createNote}><FilePlus2 size={18}/><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small></button><button className="start-card" onClick={() => { setChatOpen(true); }}><MessageCircle size={18}/><strong>Mit deinem Wissen chatten</strong><small>Fragen über alle Notizen stellen</small></button><button className="start-card" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={18}/><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small></button></div></div> : <article className="note-view" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }} onDrop={dropInEditor} onClick={event => { if (mode === 'read' && !event.target.closest('button,a,input')) setMode('edit'); }}>
             <div className="note-heading"><div className="note-meta">{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'long',year:'numeric'}).format(new Date(activeNote.updated))}<span>·</span>{wordCount} Wörter</div><div className="note-actions"><button className="button button-ghost mode-toggle" onClick={toggleNoteMode}>{mode === 'edit' ? 'Vorschau' : 'Bearbeiten'}</button><button className="icon-button" title="Umbenennen" onClick={() => { if (mode === 'edit') noteInputRef.current?.focus(); else { focusTitleRef.current = true; setMode('edit'); } }}><Pencil size={15}/></button><button className="icon-button" title="Markdown exportieren" onClick={() => exportNote(activeNote)}><Download size={15}/></button></div></div>
             {mode === 'edit' ? <><input ref={noteInputRef} className="note-title-input read-title" value={title} onChange={event => setTitle(event.target.value)} onBlur={commitTitle} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitTitle(); event.currentTarget.blur(); } }}/><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><textarea ref={editorRef} className="markdown-editor" value={body} onChange={event => updateBody(event.target.value)} placeholder={'Schreib deinen Gedanken auf …\n\nTipp: Nutze #tags und [[Wikilinks]].'}/></> : <><h1 className="read-title">{activeNote.title}</h1><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><div onClick={event => { if (!event.target.closest('input,a')) setMode('edit'); }}><MarkdownPreview source={body} onWiki={resolveWiki} onToggleTask={toggleTask}/></div></>}
             <div className="editor-footer"><span><i className="status-dot"/> Alle Änderungen gespeichert</span><span>Markdown · UTF-8</span></div>
           </article>}
         </section>
-        <aside className="right-sidebar"><div className="right-head"><span>{activePdf ? 'PDF-DETAILS' : 'NOTIZ-DETAILS'}</span><CircleHelp size={15}/></div>{activeNote ? <><div className="detail-section"><span>BACKLINKS</span>{backlinks.length ? backlinks.map(note => <button key={note.id} className="detail-link" onClick={() => openNote(note.id)}>{note.title}</button>) : <p>Noch keine Rückverweise</p>}</div><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activeNote.path}</p></div><div className="detail-section"><span>WORTANZAHL</span><p>{wordCount} Wörter</p></div></> : activePdf ? <><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activePdf.path}</p></div><div className="detail-section"><span>DATEIGRÖSSE</span><p>{(activePdf.size / 1024 / 1024).toFixed(2)} MB</p></div></> : <div className="right-empty"><div className="detail-orbit">✳</div><strong>Alles an seinem Platz</strong><p>Öffne eine Notiz, um ihre Details und Verbindungen zu sehen.</p></div>}</aside>
+        <aside className={`right-sidebar${detailsCollapsed ? ' collapsed' : ''}`}><div className="right-head">{!detailsCollapsed && <><span>{activePdf ? 'PDF-DETAILS' : 'NOTIZ-DETAILS'}</span><CircleHelp size={15}/></>}<button className="icon-button details-toggle" type="button" title={detailsCollapsed ? 'Details einblenden' : 'Details einklappen'} aria-label={detailsCollapsed ? 'Details einblenden' : 'Details einklappen'} aria-expanded={!detailsCollapsed} onClick={() => setDetailsCollapsed(value => !value)}>{detailsCollapsed ? <ChevronLeft size={15}/> : <ChevronRight size={15}/>}</button></div>{!detailsCollapsed && (activeNote ? <><div className="detail-section"><span>BACKLINKS</span>{backlinks.length ? backlinks.map(note => <button key={note.id} className="detail-link" onClick={() => openNote(note.id)}>{note.title}</button>) : <p>Noch keine Rückverweise</p>}</div><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activeNote.path}</p></div><div className="detail-section"><span>WORTANZAHL</span><p>{wordCount} Wörter</p></div></> : activePdf ? <><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activePdf.path}</p></div><div className="detail-section"><span>DATEIGRÖSSE</span><p>{(activePdf.size / 1024 / 1024).toFixed(2)} MB</p></div></> : <div className="right-empty"><div className="detail-orbit">✳</div><strong>Alles an seinem Platz</strong><p>Öffne eine Notiz, um ihre Details und Verbindungen zu sehen.</p></div>)}</aside>
       </div>
       <footer className="statusbar"><span><i className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/> {auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span><span>{activeNote ? `${activeNote.title} · ${auth.user && cloudReady ? 'Cloud' : 'lokal'}` : activePdf?.name || 'Willkommen in atelier'}</span><span>{activePdf ? 'PDF · Firebase Storage' : 'Markdown · UTF-8'}</span></footer>
     </main>
@@ -710,7 +786,7 @@ function Workspace() {
     <DialogFrame open={searchOpen} onOpenChange={setSearchOpen} title="Suche im Wissensgarten" description="Volltextsuche in allen Notizen dieses Vaults.">
       <div className="search-dialog"><div className="search-field"><Search size={17}/><input autoFocus value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Notiz oder Inhalt suchen …" onKeyDown={event => { if (event.key === 'Enter' && results[0]) selectResult(results[0]); }}/></div><div className="search-results">{results.map(note => <button key={note.id} className="search-result" onClick={() => selectResult(note)}><FileText size={15}/><span><strong>{note.title}</strong><small>{note.path} · {note.body.slice(0, 100)}</small></span></button>)}{!results.length && <p className="empty-tree">Keine Treffer</p>}</div></div>
     </DialogFrame>
-    <DialogFrame open={graphOpen} onOpenChange={setGraphOpen} title="Wissensgraph" description={`${vault.notes.length} Notizen in ${vault.name}`}><div className="graph-preview">{vault.notes.map(note => <button key={note.id} onClick={() => { openNote(note.id); setGraphOpen(false); }}>{note.title}</button>)}</div></DialogFrame>
+    <DialogFrame open={graphOpen} onOpenChange={setGraphOpen} title="Wissensgraph" description={`${vault.notes.length} Notizen in ${vault.name}`} className="graph-dialog"><KnowledgeGraph notes={vault.notes} activeId={activeId} onOpen={id => { openNote(id); setGraphOpen(false); }}/></DialogFrame>
     <ConfirmDialog open={Boolean(confirmation)} onOpenChange={open => !open && setConfirmation(null)} title={confirmation?.title || ''} description={confirmation?.description || ''} confirmLabel={confirmation?.confirmLabel} danger={confirmation?.danger} onConfirm={confirmation?.onConfirm || (() => setConfirmation(null))}/>
     <input id="vault-import" className="sr-only" type="file" multiple onChange={pickFile}/>
     {toast && <div className="toast" role="status">{toast}</div>}

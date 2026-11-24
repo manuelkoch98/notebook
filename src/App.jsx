@@ -14,6 +14,9 @@ import KnowledgeChat from './components/KnowledgeChat.jsx';
 import { validateChatCreation } from './chatCreation.js';
 
 const DB_KEY = 'atelier-db-v1';
+const SAVED_STATUS = 'Alle Änderungen gespeichert';
+const LOADING_STATUS = 'Notizen werden geladen …';
+const SAVING_STATUS = 'Änderungen werden gespeichert …';
 const freshVault = () => ({ id: 'main', name: 'Mein Wissensgarten', folders: ['Ideen', 'Notizen'], notes: [
   { id: 'welcome-note', title: 'Willkommen in atelier', path: 'Willkommen in atelier.md', body: '## Ein guter Ort für deine Gedanken\n\natelier ist deine persönliche Markdown-Wissenswerkstatt. Verbinde Notizen mit **[[Wikilinks]]** und finde Gedanken später mit der Suche wieder.\n\n### Dein erster Schritt\n\n- Schreib eine Notiz\n- Verknüpfe sie mit `[[einer anderen Notiz]]`\n- Nutze #ideen für ein Tag\n', created: Date.now(), updated: Date.now() },
   { id: 'wikilinks', title: 'Wikilinks', path: 'Ideen/Wikilinks.md', body: '## Gedanken verbinden\n\nEin Link wie [[Willkommen in atelier]] verbindet diese Notiz mit deiner Startseite.\n\n#verbindungen', created: Date.now(), updated: Date.now() }
@@ -162,7 +165,7 @@ function Workspace() {
   const [sidebarWidth, setSidebarWidth] = useState(() => Math.max(190, Math.min(480, Number(localStorage.getItem('atelier-sidebar-width')) || 256)));
   const [toast, setToast] = useState('');
   const [cloudReady, setCloudReady] = useState(false);
-  const [cloudStatus, setCloudStatus] = useState('Lokal zwischengespeichert');
+  const [cloudStatus, setCloudStatus] = useState(auth.user ? LOADING_STATUS : SAVED_STATUS);
   const [savingNote, setSavingNote] = useState(false);
   const [syncWake, setSyncWake] = useState(0);
   const [, setProfileVersion] = useState(0);
@@ -195,7 +198,7 @@ function Workspace() {
     return () => cancelAnimationFrame(frame);
   }, [activeId, mode, activeNote]);
   useEffect(() => {
-    if (!auth.user || !auth.db || !auth.firestoreSdk) { setCloudReady(false); setCloudStatus(auth.user ? 'Firebase wird verbunden …' : 'Lokal zwischengespeichert'); return; }
+    if (!auth.user || !auth.db || !auth.firestoreSdk) { setCloudReady(false); setCloudStatus(auth.user ? LOADING_STATUS : SAVED_STATUS); return; }
     const fs = auth.firestoreSdk;
     const root = fs.collection(auth.db, 'users', auth.user.uid, 'vaults');
     let cancelled = false;
@@ -207,6 +210,7 @@ function Workspace() {
     let initializing = false;
     let rootServerReady = false;
     setCloudReady(false);
+    setCloudStatus(LOADING_STATUS);
 
     const applyCloudSnapshot = (vaultDocs) => {
       if (cancelled || !rootServerReady || vaultDocs.some(item => !readyVaults.has(item.id))) return;
@@ -227,10 +231,10 @@ function Workspace() {
         setDb(current => JSON.stringify(current) === JSON.stringify({ vaults: cloudVaults }) ? current : { vaults: cloudVaults });
         setVaultId(current => cloudVaults.some(item => item.id === current) ? current : cloudVaults[0].id);
         setCloudReady(true);
-        setCloudStatus('Mit Cloud synchronisiert');
+        setCloudStatus(SAVED_STATUS);
       } else {
         setCloudReady(true);
-        setCloudStatus('Mit Cloud synchronisiert');
+        setCloudStatus(SAVED_STATUS);
       }
     };
 
@@ -246,7 +250,7 @@ function Workspace() {
             const notesRef = fs.collection(vaultRef, 'notes');
             await Promise.all(item.notes.map(note => fs.setDoc(fs.doc(notesRef, note.id), { id: note.id, title: note.title, path: note.path, body: note.body, created: note.created, updated: note.updated, updatedAt: note.updated || Date.now() })));
           }));
-        } catch (error) { if (!cancelled) setCloudStatus('Firebase-Speicherung fehlgeschlagen'); }
+        } catch (error) { if (!cancelled) setCloudStatus('Änderungen konnten nicht gespeichert werden'); }
         return;
       }
       const docs = snapshot.docs.map(item => ({ id: item.id, data: item.data() }));
@@ -259,10 +263,10 @@ function Workspace() {
           noteSnapshots.set(item.id, notes.docs.map(note => ({ id: note.id, ...note.data(), baseUpdatedAt: note.data().updatedAt, baseBody: note.data().body, baseTitle: note.data().title, basePath: note.data().path, baseOrder: note.data().order })));
           if (!notes.metadata.fromCache) readyVaults.add(item.id);
           applyCloudSnapshot(latestVaultDocs);
-        }, () => setCloudStatus('Firebase konnte Notizen nicht laden')));
+        }, () => setCloudStatus('Notizen konnten nicht geladen werden')));
       }
       applyCloudSnapshot(docs);
-    }, () => { if (!cancelled) setCloudStatus('Firebase-Verbindung fehlgeschlagen'); });
+    }, () => { if (!cancelled) setCloudStatus('Verbindung fehlgeschlagen'); });
 
     return () => { cancelled = true; rootUnsubscribe?.(); noteUnsubscribes.forEach(unsubscribe => unsubscribe()); };
     // Local data is used only to seed an account with an empty cloud vault.
@@ -277,7 +281,7 @@ function Workspace() {
       if (syncInFlight.current) { syncPending.current = true; return; }
       syncInFlight.current = true;
       const saveOnly = saveOnlyNoteRef.current;
-      setCloudStatus(saveLockRef.current ? 'Notiz wird in der Cloud gespeichert …' : mode === 'edit' && activeNote ? 'Textänderungen werden beim Verlassen gespeichert …' : 'Änderungen werden synchronisiert …');
+      setCloudStatus(mode === 'edit' && activeNote && !saveLockRef.current ? 'Änderungen werden beim Verlassen gespeichert …' : SAVING_STATUS);
       let conflictsSaved = 0;
       let deferredActiveNote = false;
       try {
@@ -357,8 +361,8 @@ function Workspace() {
           saveLockRef.current = false;
           setSavingNote(false);
         }
-        setCloudStatus(conflictsSaved ? 'Konflikt gesichert: beide Textfassungen bleiben erhalten' : deferredActiveNote ? 'Entwurf lokal gesichert · Firebase-Speicherung beim Verlassen' : 'Mit Cloud synchronisiert');
-      } catch (error) { setCloudStatus('Offline · Änderungen warten auf Synchronisierung'); }
+        setCloudStatus(conflictsSaved ? 'Konflikt gesichert: beide Textfassungen bleiben erhalten' : deferredActiveNote ? 'Entwurf gespeichert' : SAVED_STATUS);
+      } catch (error) { setCloudStatus('Offline · Änderungen werden später gespeichert'); }
       finally {
         syncInFlight.current = false;
         if (saveOnly) saveOnlyNoteRef.current = null;
@@ -393,7 +397,7 @@ function Workspace() {
     saveOnlyNoteRef.current = { vaultId, noteId: note.id };
     saveLockRef.current = true;
     setSavingNote(true);
-    setCloudStatus('Notiz wird in der Cloud gespeichert …');
+    setCloudStatus(SAVING_STATUS);
     editorRef.current?.blur();
   }
   function openNote(id, nextMode = 'read') {
@@ -432,7 +436,7 @@ function Workspace() {
     const fs = auth.firestoreSdk;
     if (!cloudReady || !fs || !auth.db || note.baseUpdatedAt === undefined
       || note.body !== note.baseBody || note.title !== note.baseTitle || note.path !== note.basePath) {
-      throw new Error('Warte, bis diese Notiz mit Firebase synchronisiert ist, und versuche es erneut.');
+      throw new Error('Warte, bis die Notiz gespeichert ist, und versuche es erneut.');
     }
     const ref = fs.doc(auth.db, 'users', auth.user.uid, 'vaults', target.vaultId, 'notes', target.id);
     await fs.runTransaction(auth.db, async transaction => {
@@ -473,8 +477,8 @@ function Workspace() {
     }
 
     const fs = auth.firestoreSdk;
-    if (!cloudReady || !auth.db || !fs) throw new Error('Warte auf die Verbindung zu Firebase und versuche es erneut.');
-    if (syncInFlight.current) throw new Error('Der Vault wird gerade synchronisiert. Versuche es gleich erneut.');
+    if (!cloudReady || !auth.db || !fs) throw new Error('Warte auf die Verbindung und versuche es erneut.');
+    if (syncInFlight.current) throw new Error('Änderungen werden gerade gespeichert. Versuche es gleich erneut.');
     const vaultRef = fs.doc(auth.db, 'users', auth.user.uid, 'vaults', proposal.vaultId);
     const notesRef = fs.collection(vaultRef, 'notes');
     const paths = [...new Set([...proposal.folders, ...notes.map(note => note.path)])];
@@ -702,7 +706,7 @@ function Workspace() {
     const target = db.vaults.find(item => item.id === id);
     if (!target) return;
     if (auth.user) {
-      if (!auth.db || !auth.firestoreSdk) return notify('Firebase ist noch nicht verbunden. Versuche es gleich noch einmal.');
+      if (!auth.db || !auth.firestoreSdk) return notify('Die Verbindung wird noch hergestellt. Versuche es gleich erneut.');
       const fs = auth.firestoreSdk;
       try {
         const vaultRef = fs.doc(fs.collection(auth.db, 'users', auth.user.uid, 'vaults'), target.id);
@@ -713,7 +717,7 @@ function Workspace() {
           await batch.commit();
         }
         await fs.deleteDoc(vaultRef);
-      } catch (error) { return notify('Vault konnte nicht aus Firebase gelöscht werden.'); }
+      } catch (error) { return notify('Vault konnte nicht gelöscht werden.'); }
     }
     const next = db.vaults.find(item => item.id !== id);
     setDb(current => ({ ...current, vaults: current.vaults.filter(item => item.id !== id) }));
@@ -758,7 +762,7 @@ function Workspace() {
     });
     if (!pdfs.length) return;
     if (!auth.user || !auth.storage || !auth.storageSdk) return notify('Bitte anmelden, um PDFs im Vault abzulegen.');
-    setCloudStatus('PDF wird hochgeladen …');
+    setCloudStatus('PDF wird gespeichert …');
     const added = [];
     try {
       for (const file of pdfs) {
@@ -770,11 +774,11 @@ function Workspace() {
       }
       const parentFolders = added.flatMap(file => { const parts = parentPath(file.path).split('/').filter(Boolean); return parts.map((_, index) => parts.slice(0, index + 1).join('/')); });
       updateVault(current => ({ ...current, attachments: [...(current.attachments || []).filter(file => !added.some(next => next.path.toLocaleLowerCase() === file.path.toLocaleLowerCase())), ...added], folders: [...new Set([...current.folders, ...parentFolders])] }));
-      setCloudStatus('Mit Cloud synchronisiert');
+      setCloudStatus(SAVED_STATUS);
       notify(`${added.length} PDF-Datei(en) hinzugefügt`);
     } catch {
-      setCloudStatus('PDF-Upload fehlgeschlagen');
-      notify('PDF konnte nicht in Firebase Storage gespeichert werden.');
+      setCloudStatus('PDF konnte nicht gespeichert werden');
+      notify('PDF konnte nicht gespeichert werden.');
     }
   }
   async function openAttachment(file) {
@@ -873,8 +877,18 @@ function Workspace() {
     return vault.notes.filter(note => !query || `${note.title}\n${note.body}`.toLowerCase().includes(query));
   }, [vault, searchText]);
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
+  const storageStatus = auth.user ? cloudStatus : SAVED_STATUS;
+  const storageConfirmed = storageStatus === SAVED_STATUS || storageStatus === 'Entwurf gespeichert';
+  const statusDotClass = storageConfirmed ? 'status-dot' : 'status-dot syncing';
 
-  return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` }} onPointerDown={event => { if (!saveLockRef.current && mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); beginSaveBarrier(); setMode('read'); } }}>
+  function preventFileDropNavigation(event) {
+    // Drop targets in the file tree still receive the event and can import the files.
+    if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+  }
+
+  return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` }}
+    onDragOverCapture={preventFileDropNavigation} onDropCapture={preventFileDropNavigation}
+    onPointerDown={event => { if (!saveLockRef.current && mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); beginSaveBarrier(); setMode('read'); } }}>
     <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setChatOpen(false); setActivePdf(null); setActiveId(null); setTabs([]); }}><BrandMark/></Link><button className={`rail-button${!chatOpen ? ' active' : ''}`} title="Dateien" onClick={() => { setChatOpen(false); setSidebarOpen(open => !open); }}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className={`rail-button${chatOpen ? ' active' : ''}`} title="Wissenschat" aria-label="Wissenschat" aria-pressed={chatOpen} onClick={() => setChatOpen(value => !value)}><MessageCircle size={17}/></button><button className="rail-button" title="Graph" onClick={() => { setChatOpen(false); setGraphOpen(true); }}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
     <aside className="sidebar">
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span>
@@ -888,7 +902,7 @@ function Workspace() {
         </DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root>
       </div><button className="icon-button" aria-label="Neuen Vault erstellen" title="Neuen Vault erstellen" onClick={() => { setField(''); setDialog('vault'); }}><Plus size={19}/></button></div>
       <FileTree vault={vault} activeId={activeId} collapsed={collapsed} setCollapsed={setCollapsed} onOpen={openNote} onEditWithAI={openNoteWithAI} onRename={renameNote} onDelete={deleteNote} onMove={moveNote} onExport={exportNote} onCreateNote={createNote} onCreateFolder={startNewFolder} onRenameFolder={renameFolder} onDeleteFolder={deleteFolder} onImport={() => setDialog('import')} onExportVault={exportVault} onDragStart={dragStart} onMoveFolder={moveFolder} onReorder={reorderNote} onReorderFolder={reorderFolder} onImportAttachments={importAttachments} onOpenAttachment={openAttachment} onMoveAttachment={moveAttachment} onRenameAttachment={renameAttachment} onDeleteAttachment={deleteAttachment}/>
-      <div className="sidebar-status"><span className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/><span>{auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span></div>
+      <div className="sidebar-status"><span className={statusDotClass}/><span>{storageStatus}</span></div>
     </aside>
     <div className="sidebar-resizer" role="separator" aria-label="Breite der Seitenleiste ändern" aria-orientation="vertical" aria-valuemin={190} aria-valuemax={480} aria-valuenow={sidebarWidth} tabIndex={0}
       onPointerDown={event => { event.preventDefault(); event.stopPropagation(); sidebarResizing.current = true; event.currentTarget.setPointerCapture(event.pointerId); }}
@@ -919,10 +933,10 @@ function Workspace() {
       <div className="tabs">{tabs.map(id => { const pdf = id.startsWith('pdf:') ? (vault.attachments || []).find(file => file.id === id.slice(4)) : null; const note = pdf ? null : vault.notes.find(item => item.id === id); const label = pdf?.name || note?.title; return label && <button key={id} className={`tab${(pdf ? activePdf?.id === pdf.id : activeId === id) ? ' active' : ''}`} onClick={() => activateTab(id)}><FileText size={14}/><span>{label}</span><span role="button" aria-label="Tab schließen" className="tab-close" onClick={event => { event.stopPropagation(); closeTab(id); }}>×</span></button>; })}</div>
       <div className={`content-wrap${detailsCollapsed ? ' details-collapsed' : ''}${standaloneChat ? ' chat-content-wrap' : chatBesideDocument ? ' chat-side-wrap' : ''}`}>
         <section className="editor-pane" hidden={standaloneChat} onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }}>
-          {activePdf ? <div className="pdf-view"><div className="pdf-view-heading"><FileText size={17}/><span>{activePdf.path}</span><a className="button button-outline" href={activePdf.url} download={activePdf.name}>PDF herunterladen</a></div><iframe title={activePdf.name} src={activePdf.url} className="pdf-frame"/></div> : !activeNote ? <div className="welcome-view"><p className="eyebrow">DEINE DIGITALEN NOTIZEN</p><h1>Hallo <em>{(profileGreeting || auth.user?.displayName || 'Manuel').trim().split(/\s+/)[0]}.</em></h1><p className="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p><div className="welcome-actions"><button className="button button-primary" onClick={createNote}><FilePlus2 size={16}/> Erste Notiz schreiben</button><button className="button button-outline" onClick={() => setDialog('import')}><Download size={15}/> Vault importieren</button></div><div className="welcome-divider"/><div className="recent-head"><div><p className="eyebrow">LOS GEHT’S</p><h2>Dein Arbeitsbereich</h2></div><span className="local-badge"><i/> {auth.user ? cloudReady ? 'Mit Cloud synchronisiert' : cloudStatus : 'Lokal zwischengespeichert'}</span></div><div className="start-grid"><button className="start-card" onClick={createNote}><FilePlus2 size={18}/><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small></button><button className="start-card" onClick={() => { setChatOpen(true); }}><MessageCircle size={18}/><strong>Mit deinem Wissen chatten</strong><small>Fragen über alle Notizen stellen</small></button><button className="start-card" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={18}/><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small></button></div></div> : <article className="note-view" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }} onDrop={dropInEditor} onClick={event => { if (mode === 'read' && !event.target.closest('button,a,input')) setMode('edit'); }}>
+          {activePdf ? <div className="pdf-view"><div className="pdf-view-heading"><FileText size={17}/><span>{activePdf.path}</span><a className="button button-outline" href={activePdf.url} download={activePdf.name}>PDF herunterladen</a></div><iframe title={activePdf.name} src={activePdf.url} className="pdf-frame"/></div> : !activeNote ? <div className="welcome-view"><p className="eyebrow">DEINE DIGITALEN NOTIZEN</p><h1>Hallo <em>{(profileGreeting || auth.user?.displayName || 'Manuel').trim().split(/\s+/)[0]}.</em></h1><p className="welcome-copy">Ein ruhiger Ort für Gedanken, Wissen und alles, was du nicht vergessen möchtest.</p><div className="welcome-actions"><button className="button button-primary" onClick={createNote}><FilePlus2 size={16}/> Erste Notiz schreiben</button><button className="button button-outline" onClick={() => setDialog('import')}><Download size={15}/> Vault importieren</button></div><div className="welcome-divider"/><div className="recent-head"><div><p className="eyebrow">LOS GEHT’S</p><h2>Dein Arbeitsbereich</h2></div><span className="local-badge"><i className={statusDotClass}/> {storageStatus}</span></div><div className="start-grid"><button className="start-card" onClick={createNote}><FilePlus2 size={18}/><strong>Gedanken festhalten</strong><small>Eine neue Notiz beginnen</small></button><button className="start-card" onClick={() => { setChatOpen(true); }}><MessageCircle size={18}/><strong>Mit deinem Wissen chatten</strong><small>Fragen über alle Notizen stellen</small></button><button className="start-card" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={18}/><strong>Wissen wiederfinden</strong><small>Alle Notizen durchsuchen</small></button></div></div> : <article className="note-view" onDragOver={event => { if (event.dataTransfer.types.includes('application/x-atelier-note') || event.dataTransfer.types.includes('application/x-atelier-attachment')) event.preventDefault(); }} onDrop={dropInEditor} onClick={event => { if (mode === 'read' && !event.target.closest('button,a,input')) setMode('edit'); }}>
             <div className="note-heading"><div className="note-meta">{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'long',year:'numeric'}).format(new Date(activeNote.updated))}<span>·</span>{wordCount} Wörter</div><div className="note-actions"><button className="button button-ghost mode-toggle" onClick={toggleNoteMode}>{mode === 'edit' ? 'Vorschau' : 'Bearbeiten'}</button><button className="icon-button" title="Umbenennen" onClick={() => { if (mode === 'edit') noteInputRef.current?.focus(); else { focusTitleRef.current = true; setMode('edit'); } }}><Pencil size={15}/></button><button className="icon-button" title="Markdown exportieren" onClick={() => exportNote(activeNote)}><Download size={15}/></button></div></div>
             {mode === 'edit' ? <><input ref={noteInputRef} className="note-title-input read-title" value={title} onChange={event => setTitle(event.target.value)} onBlur={commitTitle} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitTitle(); event.currentTarget.blur(); } }}/><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><textarea ref={editorRef} className="markdown-editor" value={body} onChange={event => updateBody(event.target.value)} placeholder={'Schreib deinen Gedanken auf …\n\nTipp: Nutze #tags und [[Wikilinks]].'}/></> : <><h1 className="read-title">{activeNote.title}</h1><div className="properties-row">Erstellt <span>{new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(activeNote.created))}</span></div><div onClick={event => { if (!event.target.closest('input,a')) setMode('edit'); }}><MarkdownPreview source={body} onWiki={resolveWiki} onToggleTask={toggleTask}/></div></>}
-            <div className="editor-footer"><span><i className="status-dot"/> Alle Änderungen gespeichert</span><span>Markdown · UTF-8</span></div>
+            <div className="editor-footer"><span><i className={statusDotClass}/> {storageStatus}</span><span>Markdown · UTF-8</span></div>
           </article>}
         </section>
         {!chatOpen && <aside className={`right-sidebar${detailsCollapsed ? ' collapsed' : ''}`}><div className="right-head">{!detailsCollapsed && <><span>{activePdf ? 'PDF-DETAILS' : 'NOTIZ-DETAILS'}</span><CircleHelp size={15}/></>}<button className="icon-button details-toggle" type="button" title={detailsCollapsed ? 'Details einblenden' : 'Details einklappen'} aria-label={detailsCollapsed ? 'Details einblenden' : 'Details einklappen'} aria-expanded={!detailsCollapsed} onClick={() => setDetailsCollapsed(value => !value)}>{detailsCollapsed ? <ChevronLeft size={15}/> : <ChevronRight size={15}/>}</button></div>{!detailsCollapsed && (activeNote ? <><div className="detail-section"><span>BACKLINKS</span>{backlinks.length ? backlinks.map(note => <button key={note.id} className="detail-link" onClick={() => openNote(note.id)}>{note.title}</button>) : <p>Noch keine Rückverweise</p>}</div><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activeNote.path}</p></div><div className="detail-section"><span>WORTANZAHL</span><p>{wordCount} Wörter</p></div></> : activePdf ? <><div className="detail-section"><span>DATEI-INFORMATIONEN</span><p>{activePdf.path}</p></div><div className="detail-section"><span>DATEIGRÖSSE</span><p>{(activePdf.size / 1024 / 1024).toFixed(2)} MB</p></div></> : <div className="right-empty"><div className="detail-orbit">✳</div><strong>Alles an seinem Platz</strong><p>Öffne eine Notiz, um ihre Details und Verbindungen zu sehen.</p></div>)}</aside>}
@@ -941,7 +955,7 @@ function Workspace() {
           />
         </div>
       </div>
-      <footer className="statusbar"><span><i className={`status-dot${auth.user && !cloudReady ? ' syncing' : ''}`}/> {auth.user ? cloudStatus : 'Lokal zwischengespeichert'}</span><span>{activeNote ? `${activeNote.title} · ${auth.user && cloudReady ? 'Cloud' : 'lokal'}` : activePdf?.name || 'Willkommen in atelier'}</span><span>{activePdf ? 'PDF · Firebase Storage' : 'Markdown · UTF-8'}</span></footer>
+      <footer className="statusbar"><span><i className={statusDotClass}/> {storageStatus}</span><span>{activeNote?.title || activePdf?.name || 'Willkommen in atelier'}</span><span>{activePdf ? 'PDF' : 'Markdown · UTF-8'}</span></footer>
     </main>
 
     <DialogFrame open={Boolean(dialog)} onOpenChange={open => !open && setDialog('')} title={dialog === 'folder' ? 'Neuer Ordner' : dialog === 'vault' ? 'Neuer Vault' : dialog === 'vault-rename' ? 'Vault umbenennen' : 'Markdown-Vault importieren'} description={dialog === 'import' ? 'Wähle einen Ordner oder mehrere Markdown-Dateien aus.' : dialog === 'vault-rename' ? 'Vergib einen neuen Namen für diesen Arbeitsbereich.' : 'Gib einen Namen ein, um fortzufahren.'}>

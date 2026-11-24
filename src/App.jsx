@@ -6,7 +6,7 @@ import { useAuth } from './auth/AuthProvider.jsx';
 import FileTree from './components/FileTree.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import MarkdownPreview from './components/MarkdownPreview.jsx';
-import ProfileMenu from './components/ProfileMenu.jsx';
+import DesktopUpdates from './components/DesktopUpdates.jsx';
 import BrandMark from './components/BrandMark.jsx';
 import DialogFrame from './components/ui/DialogFrame.jsx';
 import ConfirmDialog from './components/ui/ConfirmDialog.jsx';
@@ -182,6 +182,7 @@ function Workspace() {
   const syncInFlight = useRef(false);
   const syncPending = useRef(false);
   const saveLockRef = useRef(false);
+  const updateInProgress = useRef(false);
   const saveOnlyNoteRef = useRef(null);
   const profileGreeting = auth.user ? localStorage.getItem(`atelier-profile-name:${auth.user.uid}`) : localStorage.getItem('atelier-profile-name:local');
 
@@ -374,6 +375,7 @@ function Workspace() {
   }, [db, cloudReady, auth.user, auth.db, auth.firestoreSdk, mode, activeId, syncWake]);
   useEffect(() => {
     const handler = event => {
+      if (updateInProgress.current) return;
       const mod = event.metaKey || event.ctrlKey;
       if (!mod) return;
       if (event.key.toLowerCase() === 'k') { event.preventDefault(); setSearchText(''); setSearchOpen(true); }
@@ -881,6 +883,22 @@ function Workspace() {
   const storageConfirmed = storageStatus === SAVED_STATUS || storageStatus === 'Entwurf gespeichert';
   const statusDotClass = storageConfirmed ? 'status-dot' : 'status-dot syncing';
 
+  function prepareForUpdate() {
+    const pendingChanges = auth.user && dbRef.current.vaults.some(item =>
+      item.deletedNoteIds?.length || item.notes.some(note => note.baseUpdatedAt === undefined
+        || note.body !== note.baseBody || note.title !== note.baseTitle
+        || note.path !== note.basePath || note.order !== note.baseOrder));
+    if (mode === 'edit' || saveLockRef.current || syncInFlight.current || syncPending.current
+      || pendingChanges || (auth.user && cloudStatus !== SAVED_STATUS)) {
+      throw new Error('Beende die Bearbeitung und warte, bis alle Änderungen gespeichert sind.');
+    }
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(dbRef.current));
+    } catch {
+      throw new Error('Der aktuelle Stand konnte vor dem Neustart nicht gespeichert werden.');
+    }
+  }
+
   function preventFileDropNavigation(event) {
     // Drop targets in the file tree still receive the event and can import the files.
     if (event.dataTransfer.types.includes('Files')) event.preventDefault();
@@ -889,7 +907,8 @@ function Workspace() {
   return <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` }}
     onDragOverCapture={preventFileDropNavigation} onDropCapture={preventFileDropNavigation}
     onPointerDown={event => { if (!saveLockRef.current && mode === 'edit' && activeNote && !event.target.closest('.note-view')) { commitTitle(); beginSaveBarrier(); setMode('read'); } }}>
-    <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setChatOpen(false); setActivePdf(null); setActiveId(null); setTabs([]); }}><BrandMark/></Link><button className={`rail-button${!chatOpen ? ' active' : ''}`} title="Dateien" onClick={() => { setChatOpen(false); setSidebarOpen(open => !open); }}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className={`rail-button${chatOpen ? ' active' : ''}`} title="Wissenschat" aria-label="Wissenschat" aria-pressed={chatOpen} onClick={() => setChatOpen(value => !value)}><MessageCircle size={17}/></button><button className="rail-button" title="Graph" onClick={() => { setChatOpen(false); setGraphOpen(true); }}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><ProfileMenu/></aside>
+    <aside className="rail"><Link to="/" className="brand-mark" aria-label="atelier Startseite" onClick={() => { setChatOpen(false); setActivePdf(null); setActiveId(null); setTabs([]); }}><BrandMark/></Link><button className={`rail-button${!chatOpen ? ' active' : ''}`} title="Dateien" onClick={() => { setChatOpen(false); setSidebarOpen(open => !open); }}><PanelLeft size={17}/></button><button className="rail-button" title="Suche" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Search size={17}/></button><button className={`rail-button${chatOpen ? ' active' : ''}`} title="Wissenschat" aria-label="Wissenschat" aria-pressed={chatOpen} onClick={() => setChatOpen(value => !value)}><MessageCircle size={17}/></button><button className="rail-button" title="Graph" onClick={() => { setChatOpen(false); setGraphOpen(true); }}><Network size={17}/></button><div className="rail-spacer"/><button className="rail-button" title="Befehlspalette" onClick={() => { setChatOpen(false); setSearchText(''); setSearchOpen(true); }}><Command size={17}/></button><DesktopUpdates beforeInstall={prepareForUpdate}
+        onInstallingChange={installing => { updateInProgress.current = installing; }}/></aside>
     <aside className="sidebar">
       <div className="workspace-head"><div className="workspace-identity"><span className="workspace-caption">ARBEITSBEREICH</span>
         <DropdownMenu.Root><DropdownMenu.Trigger asChild><button type="button" className="workspace-select-button" aria-label="Vault auswählen"><span>{vault.name}</span><ChevronDown size={15}/></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="workspace-menu" align="start" sideOffset={6}>

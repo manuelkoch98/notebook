@@ -68,6 +68,12 @@ Damit die installierte App mit Firebase startet, im Repository unter **Settings 
 
 Für einen bereits veröffentlichten Tag lässt sich unter **Actions → Build desktop installers → Run workflow** der Build manuell starten. Der Tag und die Version in `src-tauri/tauri.conf.json` müssen übereinstimmen; der Workflow prüft das bei automatisch gestarteten Releases. Künftige Veröffentlichungen starten nach dem Veröffentlichen eines GitHub Releases mit dem passenden Versions-Tag.
 
+### Updates in der Desktop-App
+
+Die installierte Desktop-App prüft beim Start die `latest.json` des jüngsten GitHub Releases. Bei einem verfügbaren Update erscheint ein Download-Symbol über dem Profil. Im Profilmenü gibt es außerdem **Nach Updates suchen**. Vor der Installation müssen Änderungen gespeichert sein.
+
+Der Workflow legt die Updatepakete für macOS und Windows und die `latest.json` beim Release ab. Der öffentliche Prüfschlüssel steht in der Tauri-Konfiguration. Der private Schlüssel bleibt im GitHub Actions Secret `TAURI_SIGNING_PRIVATE_KEY`. Die lokale Kopie liegt außerhalb des Repositorys unter `~/.config/atelier/updater/signing.key`. Bewahre sie sicher auf, damit bereits installierte Versionen auch künftige Updates prüfen können.
+
 ## Import/Export
 
 Derzeit kann man mehrere Markdown-/Textdateien oder einen Ordner über den Import-Dialog einlesen. Export lädt Markdown-Notizen einzeln herunter. Vollständiger ZIP-Roundtrip inklusive Anhängen und originaler verschachtelter Struktur ist noch offen; die geplante Testmatrix steht in [FUNKTIONSMATRIX.md](FUNKTIONSMATRIX.md).

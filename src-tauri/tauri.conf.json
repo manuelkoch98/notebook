@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "atelier",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "identifier": "com.manuelkoch98.atelier",
   "build": {
     "beforeDevCommand": "npm run dev:desktop",
@@ -43,6 +43,18 @@
     ],
     "category": "Productivity",
     "shortDescription": "Pers\u00f6nliche Markdown-Wissenswerkstatt",
-    "longDescription": "atelier ist ein pers\u00f6nlicher Markdown-Arbeitsbereich zum Schreiben und Verbinden von Notizen."
+    "longDescription": "atelier ist ein pers\u00f6nlicher Markdown-Arbeitsbereich zum Schreiben und Verbinden von Notizen.",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFCRjQxOUEyQkQ3Mjg1QUMKUldTc2hYSzlvaG4wcS96Ymp3SXV0TnRIY0VFZnVMMVhkQ1NUU0hvMXltN2FvZWNDMGgzVVlvRlMK",
+      "endpoints": [
+        "https://github.com/manuelkoch98/notebook/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

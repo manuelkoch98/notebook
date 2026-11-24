@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { CircleUserRound, LogOut, Settings2, UserRound } from 'lucide-react';
+import { CircleUserRound, Download, LogOut, Settings2, UserRound } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import DialogFrame from './ui/DialogFrame.jsx';
 import UserAvatar from './UserAvatar.jsx';
@@ -11,7 +11,7 @@ function splitName(displayName = '') {
   return { first: parts[0] || '', last: parts.slice(1).join(' ') };
 }
 
-export default function ProfileMenu() {
+export default function ProfileMenu({ onCheckForUpdates }) {
   const auth = useAuth();
   const navigate = useNavigate();
   const [dialog, setDialog] = useState('');
@@ -79,6 +79,7 @@ export default function ProfileMenu() {
         <DropdownMenu.Separator className="menu-separator"/>
         <DropdownMenu.Item className="dropdown-item" onSelect={() => setDialog('profile')}><UserRound size={16}/> Profil</DropdownMenu.Item>
         <DropdownMenu.Item className="dropdown-item" onSelect={() => setDialog('settings')}><Settings2 size={16}/> Einstellungen</DropdownMenu.Item>
+        {onCheckForUpdates && <DropdownMenu.Item className="dropdown-item" onSelect={onCheckForUpdates}><Download size={16}/> Nach Updates suchen</DropdownMenu.Item>}
         <DropdownMenu.Separator className="menu-separator"/>
         {auth.user ? <DropdownMenu.Item className="dropdown-item danger" onSelect={() => auth.signOut()}><LogOut size={16}/> Abmelden</DropdownMenu.Item> : <DropdownMenu.Item className="dropdown-item" onSelect={() => navigate('/login')}><CircleUserRound size={16}/> Anmelden</DropdownMenu.Item>}
       </DropdownMenu.Content>

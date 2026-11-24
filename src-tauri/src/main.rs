@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod updates;
+
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use keyring::Entry;
@@ -364,7 +366,11 @@ fn respond_to_chat(
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![chatgpt_status, chatgpt_connect, chatgpt_disconnect, chatgpt_respond])
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![
+            chatgpt_status, chatgpt_connect, chatgpt_disconnect, chatgpt_respond,
+            updates::check_app_update, updates::install_app_update
+        ])
         .run(tauri::generate_context!())
         .expect("atelier could not start");
 }

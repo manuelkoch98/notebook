@@ -16,7 +16,7 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            bundles: dmg
+            bundles: app,dmg
           - platform: windows-latest
             bundles: nsis
     runs-on: ${{ matrix.platform }}
@@ -38,6 +38,7 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           VITE_CLOUD_ENABLED: 'true'
           VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -50,5 +51,6 @@ jobs:
           releaseName: atelier v__VERSION__
           releaseBody: Installers für macOS (DMG) und Windows (NSIS EXE).
           releaseDraft: false
+          uploadUpdaterJson: true
           args: --bundles ${{ matrix.bundles }}
           releaseAssetNamePattern: atelier-[platform]-[arch][setup].[ext]

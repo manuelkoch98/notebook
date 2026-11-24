@@ -157,3 +157,19 @@
   .chat-review-versions { grid-template-columns: 1fr; }
   .chat-review-versions pre { max-height: 21vh; }
 }
+.rail-button.rail-update {
+  background: #e6f0e9;
+  color: #365b45;
+}
+.rail-button.rail-update:hover {
+  background: #d7e7db;
+  color: #274735;
+}
+.update-notes {
+  max-height: 30vh;
+  overflow: auto;
+  margin-block: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #52525b;
+}

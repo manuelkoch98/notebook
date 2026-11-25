@@ -8,6 +8,17 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <title>atelier</title>
+    <script>
+      // Clean up registrations from older desktop releases even if the app bundle fails to load.
+      if ('__TAURI_INTERNALS__' in window && 'serviceWorker' in navigator) {
+        const workers = navigator.serviceWorker;
+        workers.getRegistration().then(async registration => {
+          if (registration?.active?.scriptURL !== new URL('/sw.js', location.href).href) return;
+          const wasControlled = Boolean(workers.controller);
+          if (await registration.unregister() && wasControlled) location.reload();
+        }).catch(console.error);
+      }
+    </script>
     <script src="/firebase-config.js"></script>
   </head>
   <body>
